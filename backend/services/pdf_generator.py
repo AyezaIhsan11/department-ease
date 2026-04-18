@@ -1,0 +1,198 @@
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from models.student import Student
+from datetime import datetime
+from typing import List
+import io
+
+
+class PDFReportGenerator:
+    """Generate PDF reports for student data"""
+    
+    def __init__(self):
+        self.styles = getSampleStyleSheet()
+        self._setup_custom_styles()
+    
+    def _setup_custom_styles(self):
+        """Setup custom paragraph styles"""
+        self.styles.add(ParagraphStyle(
+            name='CustomTitle',
+            parent=self.styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#1a1a1a'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        ))
+        
+        self.styles.add(ParagraphStyle(
+            name='CustomHeading',
+            parent=self.styles['Heading2'],
+            fontSize=16,
+            textColor=colors.HexColor('#333333'),
+            spaceAfter=12,
+            spaceBefore=12
+        ))
+    
+    def generate_monthly_report(self, year: int, month: int) -> io.BytesIO:
+        """Generate monthly student report"""
+        
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        story = []
+        
+        # Title
+        title = Paragraph(
+            f"Monthly Student Report - {datetime(year, month, 1).strftime('%B %Y')}",
+            self.styles['CustomTitle']
+        )
+        story.append(title)
+        story.append(Spacer(1, 0.3 * inch))
+        
+        # Get students enrolled in this month
+        from datetime import datetime
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        
+        # Note: This is a synchronous function, so we'll need to call it from an async context
+        # For now, we'll create a placeholder
+        
+        # Summary section
+        summary_heading = Paragraph("Report Summary", self.styles['CustomHeading'])
+        story.append(summary_heading)
+        
+        summary_data = [
+            ['Metric', 'Value'],
+            ['Report Generated', datetime.now().strftime('%Y-%m-%d %H:%M')],
+            ['Report Period', f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"],
+        ]
+        
+        summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4A90E2')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(summary_table)
+        story.append(Spacer(1, 0.5 * inch))
+        
+        # Build PDF
+        doc.build(story)
+        buffer.seek(0)
+        
+        return buffer
+    
+    def generate_yearly_report(self, year: int) -> io.BytesIO:
+        """Generate yearly student report"""
+        
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        story = []
+        
+        # Title
+        title = Paragraph(f"Annual Student Report - {year}", self.styles['CustomTitle'])
+        story.append(title)
+        story.append(Spacer(1, 0.3 * inch))
+        
+        # Summary section
+        summary_heading = Paragraph("Annual Summary", self.styles['CustomHeading'])
+        story.append(summary_heading)
+        
+        summary_data = [
+            ['Metric', 'Value'],
+            ['Report Generated', datetime.now().strftime('%Y-%m-%d %H:%M')],
+            ['Academic Year', str(year)],
+        ]
+        
+        summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4A90E2')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(summary_table)
+        story.append(Spacer(1, 0.5 * inch))
+        
+        # Build PDF
+        doc.build(story)
+        buffer.seek(0)
+        
+        return buffer
+    
+    async def generate_student_list_report(self, students: List[Student]) -> io.BytesIO:
+        """Generate detailed student list report"""
+        
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        story = []
+        
+        # Title
+        title = Paragraph("Student Directory Report", self.styles['CustomTitle'])
+        story.append(title)
+        story.append(Spacer(1, 0.3 * inch))
+        
+        # Metadata
+        meta = Paragraph(
+            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}<br/>Total Students: {len(students)}",
+            self.styles['Normal']
+        )
+        story.append(meta)
+        story.append(Spacer(1, 0.3 * inch))
+        
+        # Student table
+        if students:
+            table_data = [['ID', 'Name', 'Email', 'Department', 'Year', 'GPA', 'Status']]
+            
+            for student in students:
+                table_data.append([
+                    student.student_id,
+                    f"{student.first_name} {student.last_name}",
+                    student.email,
+                    student.department,
+                    str(student.year),
+                    str(student.gpa) if student.gpa else 'N/A',
+                    student.status
+                ])
+            
+            table = Table(table_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4A90E2')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ]))
+            
+            story.append(table)
+        
+        # Build PDF
+        doc.build(story)
+        buffer.seek(0)
+        
+        return buffer
+
+
+# Global instance
+pdf_generator = PDFReportGenerator()

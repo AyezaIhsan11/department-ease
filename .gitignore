@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Node.js / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Environment variables (IMPORTANT: may contain secrets)
+.env
+*.env
+
+# Already covered above
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# MongoDB data (local database files)
+data/db/
+*.db
+
+# Temporary files
+*.tmp
+*.temp
