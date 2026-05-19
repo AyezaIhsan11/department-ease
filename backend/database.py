@@ -5,6 +5,7 @@ from models.student import Student
 from models.user import User
 from models.event import Event
 from models.chat_history import ChatHistory
+from models.voucher import Voucher
 
 
 # Global database client
@@ -23,7 +24,8 @@ async def connect_to_mongo():
             Student,
             User,
             Event,
-            ChatHistory
+            ChatHistory,
+            Voucher
         ]
     )
     

@@ -11,7 +11,9 @@ export default function ChatPage() {
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [conversationId, setConversationId] = useState<string | null>(null)
+    const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -29,27 +31,48 @@ export default function ChatPage() {
         }
     }, [router])
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setSelectedFile(e.target.files[0])
+        }
+    }
+
+    const removeFile = () => {
+        setSelectedFile(null)
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+        }
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        if (!input.trim()) return
+        if (!input.trim() && !selectedFile) return
 
         const userMessage = input.trim()
+        const currentFile = selectedFile
         setInput('')
+        setSelectedFile(null)
         setLoading(true)
 
         // Add user message to chat
         const newMessage: ChatMessage = {
-            message: userMessage,
+            message: userMessage + (currentFile ? ` [Attached: ${currentFile.name}]` : ''),
             response: '',
         }
         setMessages(prev => [...prev, newMessage])
 
         try {
-            const response = await api.post('/api/chat', {
-                message: userMessage,
-                conversation_id: conversationId,
-            })
+            const formData = new FormData()
+            formData.append('message', userMessage)
+            if (conversationId) {
+                formData.append('conversation_id', conversationId)
+            }
+            if (currentFile) {
+                formData.append('file', currentFile)
+            }
+
+            const response = await api.post('/api/chat', formData)
 
             const { response: aiResponse, conversation_id, action_taken } = response.data
 
@@ -62,18 +85,28 @@ export default function ChatPage() {
             setMessages(prev => {
                 const updated = [...prev]
                 updated[updated.length - 1] = {
-                    message: userMessage,
+                    ...updated[updated.length - 1],
                     response: aiResponse,
                     action_taken,
                 }
                 return updated
             })
         } catch (err: any) {
+            const detail = err.response?.data?.detail
+            let errorMsg = 'Sorry, I encountered an error. Please try again.'
+            if (typeof detail === 'string') {
+                errorMsg = detail
+            } else if (Array.isArray(detail)) {
+                // FastAPI 422 validation errors return an array of objects
+                errorMsg = detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ')
+            } else if (detail) {
+                errorMsg = JSON.stringify(detail)
+            }
             setMessages(prev => {
                 const updated = [...prev]
                 updated[updated.length - 1] = {
-                    message: userMessage,
-                    response: err.response?.data?.detail || 'Sorry, I encountered an error. Please try again.',
+                    ...updated[updated.length - 1],
+                    response: errorMsg,
                 }
                 return updated
             })
@@ -199,7 +232,38 @@ export default function ChatPage() {
             {/* Input Form */}
             <div className="p-4">
                 <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
+                    {selectedFile && (
+                        <div className="mb-2 flex items-center gap-2">
+                            <div className="glass-card px-3 py-1 flex items-center gap-2 text-sm text-white">
+                                <span className="truncate max-w-[200px]">{selectedFile.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={removeFile}
+                                    className="text-white/60 hover:text-white"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="glass-card p-2 flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="p-2 text-white/60 hover:text-white transition-colors"
+                            disabled={loading}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.5l-10.94 10.94a1.5 1.5 0 01-2.121-2.121l7.693-7.693" />
+                            </svg>
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                            className="hidden"
+                            disabled={loading}
+                        />
                         <input
                             type="text"
                             value={input}
@@ -210,7 +274,7 @@ export default function ChatPage() {
                         />
                         <button
                             type="submit"
-                            disabled={loading || !input.trim()}
+                            disabled={loading || (!input.trim() && !selectedFile)}
                             className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Send

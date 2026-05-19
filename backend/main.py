@@ -5,7 +5,7 @@ from database import connect_to_mongo, close_mongo_connection
 from config import settings
 
 # Import routes
-from routes import auth, students, events, analytics, reports  # chat temporarily disabled
+from routes import auth, students, events, analytics, reports, chat, vouchers
 
 
 @asynccontextmanager
@@ -26,6 +26,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Ensure uploads directory exists
+os.makedirs("uploads/vouchers", exist_ok=True)
+
+# Mount static files for uploads
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -41,7 +50,8 @@ app.include_router(students.router)
 app.include_router(events.router)
 app.include_router(analytics.router)
 app.include_router(reports.router)
-# app.include_router(chat.router)  # Temporarily disabled - fixing LangChain compatibility
+app.include_router(chat.router)
+app.include_router(vouchers.router)
 
 
 @app.get("/")
@@ -62,9 +72,11 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+    port = int(os.environ.get("PORT", 8001))
     uvicorn.run(
         "main:app",
-        host="localhost",
-        port=8001,
+        host="0.0.0.0",
+        port=port,
         reload=True
     )

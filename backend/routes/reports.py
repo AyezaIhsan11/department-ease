@@ -18,7 +18,7 @@ async def generate_monthly_report(
 ):
     """Generate monthly PDF report"""
     
-    pdf_buffer = pdf_generator.generate_monthly_report(year, month)
+    pdf_buffer = await pdf_generator.generate_monthly_report(year, month)
     
     filename = f"monthly_report_{year}_{month:02d}.pdf"
     
@@ -36,7 +36,7 @@ async def generate_yearly_report(
 ):
     """Generate yearly PDF report"""
     
-    pdf_buffer = pdf_generator.generate_yearly_report(year)
+    pdf_buffer = await pdf_generator.generate_yearly_report(year)
     
     filename = f"yearly_report_{year}.pdf"
     

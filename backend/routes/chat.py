@@ -1,34 +1,54 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
+import os
+import uuid
 from models.user import User
 from models.chat_history import ChatHistory
-from schemas.chat import ChatRequest, ChatResponse
+from schemas.chat import ChatResponse
 from auth.dependencies import get_current_user
 from ai.agent import student_agent
-from bson import ObjectId
+from typing import Optional
 
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
+# Ensure chat attachments directory exists
+ATTACHMENTS_DIR = "uploads/chat_attachments"
+os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
+
 
 @router.post("", response_model=ChatResponse)
 async def process_chat_message(
-    request: ChatRequest,
+    message: str = Form(...),
+    conversation_id: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Process a chat message through the AI agent"""
+    """Process a chat message through the AI agent, with optional file attachment"""
+    
+    attachment_path = None
+    if file:
+        # Save uploaded file
+        file_ext = os.path.splitext(file.filename)[1]
+        unique_filename = f"{uuid.uuid4()}{file_ext}"
+        attachment_path = os.path.join(ATTACHMENTS_DIR, unique_filename)
+        
+        with open(attachment_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
     
     try:
         # Process message through AI agent
         result = await student_agent.process_message(
-            message=request.message,
-            conversation_id=request.conversation_id
+            message=message,
+            conversation_id=conversation_id,
+            attachment_path=attachment_path
         )
         
         # Save to chat history
         chat_record = ChatHistory(
             user_id=current_user.id,
             conversation_id=result["conversation_id"],
-            message=request.message,
+            message=message,
             response=result["response"],
             action_taken=result.get("action_taken")
         )
@@ -42,6 +62,10 @@ async def process_chat_message(
         )
         
     except Exception as e:
+        # Clean up file if there was an error
+        if attachment_path and os.path.exists(attachment_path):
+            os.remove(attachment_path)
+            
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing message: {str(e)}"

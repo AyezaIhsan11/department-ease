@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
 import { Student } from '@/lib/types'
@@ -14,6 +14,9 @@ export default function StudentsPage() {
     const [page, setPage] = useState(1)
     const [total, setTotal] = useState(0)
     const [totalPages, setTotalPages] = useState(0)
+    const [importing, setImporting] = useState(false)
+    const [importResult, setImportResult] = useState<{ created_count: number; total_rows: number; errors: string[] } | null>(null)
+    const csvInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         loadStudents()
@@ -65,9 +68,45 @@ export default function StudentsPage() {
         }
     }
 
+    const handleDownloadTemplate = () => {
+        const headers = 'student_id,first_name,last_name,email,department,year,gpa,contact_number,address'
+        const example = 'CS001,John,Doe,john.doe@example.com,Computer Science,1,3.5,+92-300-1234567,123 Main St'
+        const csvContent = `${headers}\n${example}`
+        const blob = new Blob([csvContent], { type: 'text/csv' })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', 'students_template.csv')
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+    }
+
+    const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setImporting(true)
+        const formData = new FormData()
+        formData.append('file', file)
+
+        try {
+            const response = await api.post('/api/students/upload/csv', formData)
+            setImportResult(response.data)
+            loadStudents()
+        } catch (err: any) {
+            alert(err.response?.data?.detail || 'Error importing CSV')
+        } finally {
+            setImporting(false)
+            // reset input so same file can be re-selected
+            if (csvInputRef.current) csvInputRef.current.value = ''
+        }
+    }
+
     return (
-        <div className="min-h-screen p-6">
-            {/* Header */}
+        <>
+            <div className="min-h-screen p-6">
+                {/* Header */}
             <div className="glass-card-white mb-6 p-6">
                 <div className="flex items-center justify-between mb-4">
                     <div>
@@ -82,10 +121,30 @@ export default function StudentsPage() {
                             ← Back
                         </button>
                         <button
+                            onClick={handleDownloadTemplate}
+                            className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition text-sm"
+                        >
+                            📄 CSV Template
+                        </button>
+                        <button
+                            onClick={() => csvInputRef.current?.click()}
+                            disabled={importing}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50"
+                        >
+                            {importing ? '⏳ Importing...' : '📥 Import CSV'}
+                        </button>
+                        <input
+                            type="file"
+                            accept=".csv"
+                            ref={csvInputRef}
+                            onChange={handleImportCSV}
+                            className="hidden"
+                        />
+                        <button
                             onClick={handleExport}
                             className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
                         >
-                            Export CSV
+                            📤 Export CSV
                         </button>
                     </div>
                 </div>
@@ -211,5 +270,47 @@ export default function StudentsPage() {
                 )}
             </div>
         </div>
+
+            {/* Import Result Modal */}
+            {importResult && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
+                        <h2 className="text-xl font-bold text-gray-800 mb-4">
+                            {importResult.created_count === importResult.total_rows ? '✅' : '⚠️'} Import Complete
+                        </h2>
+                        <div className="flex gap-4 mb-4">
+                            <div className="flex-1 bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                                <p className="text-3xl font-bold text-green-600">{importResult.created_count}</p>
+                                <p className="text-sm text-green-700 mt-1">Students Created</p>
+                            </div>
+                            <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                                <p className="text-3xl font-bold text-gray-600">{importResult.total_rows}</p>
+                                <p className="text-sm text-gray-700 mt-1">Total Rows</p>
+                            </div>
+                            {importResult.errors.length > 0 && (
+                                <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                                    <p className="text-3xl font-bold text-red-600">{importResult.errors.length}</p>
+                                    <p className="text-sm text-red-700 mt-1">Errors</p>
+                                </div>
+                            )}
+                        </div>
+                        {importResult.errors.length > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 max-h-40 overflow-y-auto">
+                                <p className="text-sm font-semibold text-red-700 mb-2">Errors:</p>
+                                {importResult.errors.map((err, i) => (
+                                    <p key={i} className="text-xs text-red-600 mb-1">• {err}</p>
+                                ))}
+                            </div>
+                        )}
+                        <button
+                            onClick={() => setImportResult(null)}
+                            className="w-full px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition font-semibold"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            )}
+        </>
     )
 }

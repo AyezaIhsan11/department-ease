@@ -81,6 +81,12 @@ export default function DashboardPage() {
                             Calendar
                         </button>
                         <button
+                            onClick={() => router.push('/dashboard/vouchers')}
+                            className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition"
+                        >
+                            Vouchers
+                        </button>
+                        <button
                             onClick={() => router.push('/chat')}
                             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition"
                         >
@@ -218,6 +224,15 @@ export default function DashboardPage() {
                         <span className="text-2xl mb-2 block">🤖</span>
                         <p className="font-semibold text-gray-900">AI Assistant</p>
                         <p className="text-sm text-gray-600 mt-1">Use natural language commands</p>
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/dashboard/vouchers')}
+                        className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl hover:shadow-lg transition text-left"
+                    >
+                        <span className="text-2xl mb-2 block">💰</span>
+                        <p className="font-semibold text-gray-900">Fee Vouchers</p>
+                        <p className="text-sm text-gray-600 mt-1">Review student fee submissions</p>
                     </button>
                 </div>
             </div>

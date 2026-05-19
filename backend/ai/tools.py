@@ -1,7 +1,15 @@
 from langchain.tools import tool
 from models.student import Student, StudentStatus
+from models.event import Event, EventCategory
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from services.email_service import email_service
+import os
+import csv
+import io
+import asyncio
+from routes.events import notify_students_of_event
+from config import settings
 
 
 @tool
@@ -209,38 +217,477 @@ async def delete_student_tool(student_id: str) -> str:
 
 
 @tool
-async def get_statistics_tool() -> str:
+async def generate_monthly_report_tool(year: int, month: int) -> str:
     """
-    Get overall statistics about students.
+    Generate a download link for a monthly student report PDF.
+    
+    Args:
+        year: The year (e.g. 2024)
+        month: The month (1-12)
     
     Returns:
-        Formatted statistics
+        The URL to download the report
+    """
+    return f"The monthly report for {month}/{year} has been generated. you can download it here: {settings.BACKEND_URL}/api/reports/monthly?year={year}&month={month}"
+
+
+@tool
+async def generate_yearly_report_tool(year: int) -> str:
+    """
+    Generate a download link for a yearly student report PDF.
+    
+    Args:
+        year: The year (e.g. 2024)
+    
+    Returns:
+        The URL to download the report
+    """
+    return f"The yearly report for {year} has been generated. you can download it here: {settings.BACKEND_URL}/api/reports/yearly?year={year}"
+
+
+@tool
+async def generate_student_list_report_tool(department: Optional[str] = None) -> str:
+    """
+    Generate a download link for the full student list PDF.
+    
+    Args:
+        department: Optional department to filter by
+    
+    Returns:
+        The URL to download the report
+    """
+    url = f"{settings.BACKEND_URL}/api/reports/student-list"
+    if department:
+        url += f"?department={department}"
+    return f"The student list report has been generated. you can download it here: {url}"
+
+
+@tool
+async def get_statistics_tool() -> str:
+    """
+    Get general statistics about the student population.
+    
+    Returns:
+        Summary of student statistics
     """
     
     total = await Student.find().count()
     active = await Student.find(Student.status == StudentStatus.ACTIVE).count()
     
-    # Get all students with GPA
-    students_with_gpa = await Student.find(Student.gpa != None).to_list()
-    avg_gpa = sum(s.gpa for s in students_with_gpa if s.gpa) / len(students_with_gpa) if students_with_gpa else 0
+    all_students = await Student.find(Student.gpa != None).to_list()
+    avg_gpa = sum(s.gpa for s in all_students if s.gpa) / len(all_students) if all_students else 0
     
     stats = f"""
-Student Statistics:
-==================
+Department Statistics:
+======================
 Total Students: {total}
 Active Students: {active}
 Average GPA: {avg_gpa:.2f}
 """
-    
     return stats
 
 
-# List of all tools
+@tool
+async def send_email_tool(
+    student_id: str,
+    subject: str,
+    body: str,
+    attachment_path: Optional[str] = None
+) -> str:
+    """
+    Send an email to a student, optionally with an attachment.
+    
+    Args:
+        student_id: The unique ID of the student
+        subject: The email subject line
+        body: The content of the email
+        attachment_path: Optional path to a file to attach
+    
+    Returns:
+        Confirmation or error message
+    """
+    
+    student = await Student.find_one(Student.student_id == student_id)
+    
+    if not student:
+        return f"Error: No student found with ID {student_id}"
+    
+    if not student.email:
+        return f"Error: Student {student_id} does not have an email address recorded."
+    
+    attachments = None
+    if attachment_path:
+        try:
+            import os
+            if os.path.exists(attachment_path):
+                filename = os.path.basename(attachment_path)
+                with open(attachment_path, "rb") as f:
+                    content = f.read()
+                attachments = [(filename, content)]
+            else:
+                return f"Error: Attachment file not found at {attachment_path}"
+        except Exception as e:
+            return f"Error reading attachment: {str(e)}"
+    
+    try:
+        await email_service.send_email(
+            to_emails=[student.email],
+            subject=subject,
+            body=body,
+            attachments=attachments
+        )
+        return f"Successfully sent email to {student.full_name} ({student.email}){ ' with attachment' if attachments else ''}."
+    except Exception as e:
+        return f"Failed to send email: {str(e)}. (Note: SMTP server might not be configured correctly)"
+
+
+@tool
+async def request_voucher_tool(student_id: str) -> str:
+    """
+    Send an email to a student requesting they upload their fee voucher.
+    
+    Args:
+        student_id: The unique ID of the student
+    
+    Returns:
+        Confirmation or error message
+    """
+    
+    student = await Student.find_one(Student.student_id == student_id)
+    
+    if not student:
+        return f"Error: No student found with ID {student_id}"
+    
+    upload_url = f"{settings.FRONTEND_URL}/upload-voucher/{student_id}"
+    
+    subject = "Action Required: Please Upload Your Fee Voucher"
+    body = f"""
+    <h2>Hello {student.first_name},</h2>
+    <p>Please upload a clear picture of your paid fee voucher to complete your registration process.</p>
+    <p>You can upload it by clicking the link below:</p>
+    <p><a href="{upload_url}" style="display:inline-block;padding:10px 20px;background-color:#0ea5e9;color:white;text-decoration:none;border-radius:5px;">Upload Fee Voucher</a></p>
+    <p>If the button doesn't work, copy and paste this link: {upload_url}</p>
+    <br>
+    <p>Best regards,<br>Department Administration Team</p>
+    """
+    
+    try:
+        await email_service.send_email(
+            to_emails=[student.email],
+            subject=subject,
+            body=body,
+            html=True
+        )
+        return f"Successfully sent voucher upload request to {student.full_name}."
+    except Exception as e:
+        return f"Failed to send request: {str(e)}"
+
+
+@tool
+async def create_event_tool(
+    title: str,
+    start_date: str,
+    end_date: str,
+    description: Optional[str] = None,
+    category: str = "other"
+) -> str:
+    """
+    Create a new department event.
+    
+    Args:
+        title: Title of the event
+        start_date: Start date and time (ISO format: YYYY-MM-DDTHH:MM:SS)
+        end_date: End date and time (ISO format: YYYY-MM-DDTHH:MM:SS)
+        description: Optional description of the event
+        category: Event category (academic, examination, holiday, workshop, seminar, cultural, sports, other)
+    
+    Returns:
+        Success or error message
+    """
+    
+    try:
+        start_dt = datetime.fromisoformat(start_date)
+        end_dt = datetime.fromisoformat(end_date)
+        
+        if start_dt >= end_dt:
+            return "Error: End date must be after start date."
+        
+        event = Event(
+            title=title,
+            start_date=start_dt,
+            end_date=end_dt,
+            description=description,
+            category=EventCategory(category.lower()),
+            created_by="system"  # Defaulting to system for tool-created events
+        )
+        
+        await event.insert()
+        
+        # Notify students
+        asyncio.create_task(notify_students_of_event(event))
+        
+        return f"Successfully created event: {title} on {start_dt.strftime('%Y-%m-%d %H:%M')}"
+        
+    except ValueError as e:
+        return f"Error parsing dates or category: {str(e)}. Use format YYYY-MM-DDTHH:MM:SS"
+    except Exception as e:
+        return f"Error creating event: {str(e)}"
+
+
+@tool
+async def import_students_from_csv_tool(file_path: str) -> str:
+    """
+    Read a CSV file and bulk-create student records from it.
+    Use this when the user uploads a CSV file and asks to add/import students from it.
+
+    Args:
+        file_path: The absolute path to the uploaded CSV file
+
+    Returns:
+        A summary of how many students were created and any errors per row
+    """
+    if not os.path.exists(file_path):
+        return f"Error: File not found at {file_path}"
+
+    try:
+        with open(file_path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+    except Exception as e:
+        return f"Error reading CSV file: {str(e)}"
+
+    required_columns = {"student_id", "first_name", "last_name", "email", "department", "year"}
+    if not rows:
+        return "Error: The CSV file is empty."
+
+    actual_columns = set(rows[0].keys())
+    missing = required_columns - actual_columns
+    if missing:
+        return f"Error: CSV is missing required columns: {', '.join(missing)}. Required: student_id, first_name, last_name, email, department, year"
+
+    created_count = 0
+    errors = []
+
+    for i, row in enumerate(rows, start=2):  # start=2 because row 1 is header
+        try:
+            student_id = str(row["student_id"]).strip()
+            first_name = str(row["first_name"]).strip()
+            last_name = str(row["last_name"]).strip()
+            email = str(row["email"]).strip()
+            department = str(row["department"]).strip()
+            year = int(str(row["year"]).strip())
+
+            if not all([student_id, first_name, last_name, email, department]):
+                errors.append(f"Row {i}: Missing required value in one of the fields")
+                continue
+
+            # Check duplicates
+            existing = await Student.find_one(Student.student_id == student_id)
+            if existing:
+                errors.append(f"Row {i}: Student ID '{student_id}' already exists")
+                continue
+
+            existing_email = await Student.find_one(Student.email == email)
+            if existing_email:
+                errors.append(f"Row {i}: Email '{email}' already registered")
+                continue
+
+            student_data: Dict[str, Any] = {
+                "student_id": student_id,
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "department": department,
+                "year": year,
+            }
+
+            gpa_val = row.get("gpa", "").strip()
+            if gpa_val:
+                student_data["gpa"] = float(gpa_val)
+
+            contact = row.get("contact_number", "").strip()
+            if contact:
+                student_data["contact_number"] = contact
+
+            address = row.get("address", "").strip()
+            if address:
+                student_data["address"] = address
+
+            courses_raw = row.get("courses", "").strip()
+            if courses_raw:
+                student_data["courses"] = [c.strip() for c in courses_raw.split(",")]
+
+            student = Student(**student_data)
+            await student.insert()
+            created_count += 1
+
+        except Exception as e:
+            errors.append(f"Row {i}: {str(e)}")
+
+    summary = f"✅ Import complete: {created_count} of {len(rows)} students created."
+    if errors:
+        summary += f"\n\n⚠️ {len(errors)} error(s):\n" + "\n".join(errors)
+    return summary
+
+
+@tool
+async def import_students_from_pdf_tool(file_path: str) -> str:
+    """
+    Read a PDF file and bulk-create student records from it.
+    Use this when the user uploads a PDF file and asks to add/import students from it.
+
+    Args:
+        file_path: The absolute path to the uploaded PDF file
+
+    Returns:
+        A summary of how many students were created and any errors per row
+    """
+    if not os.path.exists(file_path):
+        return f"Error: File not found at {file_path}"
+
+    try:
+        import pdfplumber
+    except ImportError:
+        return "Error: pdfplumber library is not installed. PDF parsing is unavailable."
+
+    rows = []
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for table in tables:
+                    for row in table:
+                        # Clean up None values
+                        clean_row = [str(cell).strip() if cell is not None else "" for cell in row]
+                        # Only add non-empty rows
+                        if any(clean_row):
+                            rows.append(clean_row)
+    except Exception as e:
+        return f"Error reading PDF file: {str(e)}"
+
+    if not rows:
+        return "Error: Could not find any readable tables in the PDF file."
+
+    # First row should be headers
+    headers = [h.lower().replace(' ', '_').strip() for h in rows[0]]
+    data_rows = rows[1:]
+
+    required_columns = {"student_id", "first_name", "last_name", "email", "department", "year"}
+    actual_columns = set(headers)
+    missing = required_columns - actual_columns
+    
+    if missing:
+        # Fallback to try finding headers in the first few rows if the first row wasn't it
+        found_headers = False
+        for i in range(min(5, len(rows))):
+            test_headers = [h.lower().replace(' ', '_').strip() for h in rows[i]]
+            if required_columns.issubset(set(test_headers)):
+                headers = test_headers
+                data_rows = rows[i+1:]
+                found_headers = True
+                missing = set()
+                break
+                
+        if not found_headers:
+            return f"Error: PDF table is missing required columns: {', '.join(missing)}. Required: student_id, first_name, last_name, email, department, year"
+
+    created_count = 0
+    errors = []
+
+    for i, row in enumerate(data_rows, start=1):
+        try:
+            # Map row to dictionary using headers
+            row_dict = {}
+            for j, header in enumerate(headers):
+                if j < len(row):
+                    row_dict[header] = row[j]
+                else:
+                    row_dict[header] = ""
+                    
+            student_id = row_dict.get("student_id", "").strip()
+            first_name = row_dict.get("first_name", "").strip()
+            last_name = row_dict.get("last_name", "").strip()
+            email = row_dict.get("email", "").strip()
+            department = row_dict.get("department", "").strip()
+            year_str = row_dict.get("year", "").strip()
+
+            if not all([student_id, first_name, last_name, email, department, year_str]):
+                errors.append(f"Row {i}: Missing required value in one of the fields")
+                continue
+
+            try:
+                year = int(year_str)
+            except ValueError:
+                errors.append(f"Row {i}: Invalid year value '{year_str}'")
+                continue
+
+            # Check duplicates
+            existing = await Student.find_one(Student.student_id == student_id)
+            if existing:
+                errors.append(f"Row {i}: Student ID '{student_id}' already exists")
+                continue
+
+            existing_email = await Student.find_one(Student.email == email)
+            if existing_email:
+                errors.append(f"Row {i}: Email '{email}' already registered")
+                continue
+
+            student_data = {
+                "student_id": student_id,
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "department": department,
+                "year": year,
+            }
+
+            gpa_val = row_dict.get("gpa", "").strip()
+            if gpa_val:
+                try:
+                    student_data["gpa"] = float(gpa_val)
+                except ValueError:
+                    pass
+
+            contact = row_dict.get("contact_number", "").strip()
+            if contact:
+                student_data["contact_number"] = contact
+
+            address = row_dict.get("address", "").strip()
+            if address:
+                student_data["address"] = address
+
+            courses_raw = row_dict.get("courses", "").strip()
+            if courses_raw:
+                student_data["courses"] = [c.strip() for c in courses_raw.split(",")]
+
+            student = Student(**student_data)
+            await student.insert()
+            created_count += 1
+
+        except Exception as e:
+            errors.append(f"Row {i}: {str(e)}")
+
+    summary = f"✅ PDF Import complete: {created_count} of {len(data_rows)} students created."
+    if errors:
+        # Only show first 10 errors to avoid huge responses
+        display_errors = errors[:10]
+        summary += f"\n\n⚠️ {len(errors)} error(s) total. First few:\n" + "\n".join(display_errors)
+    return summary
+
+
 STUDENT_TOOLS = [
     create_student_tool,
     search_students_tool,
     get_student_details_tool,
     update_student_tool,
     delete_student_tool,
-    get_statistics_tool
+    get_statistics_tool,
+    generate_monthly_report_tool,
+    generate_yearly_report_tool,
+    generate_student_list_report_tool,
+    send_email_tool,
+    request_voucher_tool,
+    create_event_tool,
+    import_students_from_csv_tool,
+    import_students_from_pdf_tool
 ]

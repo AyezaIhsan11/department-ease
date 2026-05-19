@@ -47,14 +47,29 @@ class EmailService:
                 message.attach(attachment)
         
         # Send email
-        async with aiosmtplib.SMTP(
+        smtp = aiosmtplib.SMTP(
             hostname=settings.SMTP_HOST,
             port=settings.SMTP_PORT,
-            use_tls=False
-        ) as smtp:
-            await smtp.starttls()
+            use_tls=(settings.SMTP_PORT == 465)
+        )
+        
+        try:
+            await smtp.connect()
+            if settings.SMTP_PORT == 587 and not smtp.is_connected:
+                # This part is handled by connect() usually, but let's be explicit if needed
+                pass
+            
+            if not smtp.use_tls and settings.SMTP_PORT == 587:
+                try:
+                    await smtp.starttls()
+                except aiosmtplib.errors.SMTPException as e:
+                    if "already using TLS" not in str(e):
+                        raise
+            
             await smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
             await smtp.send_message(message)
+        finally:
+            await smtp.quit()
     
     async def send_welcome_email(self, student_email: str, student_name: str):
         """Send welcome email to new student"""

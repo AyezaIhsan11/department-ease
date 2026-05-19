@@ -19,3 +19,4 @@ else {
     Write-Host "Virtual environment not found! Please run setup first." -ForegroundColor Red
     Pause
 }
+# .\venv\Scripts\python.exe main.py

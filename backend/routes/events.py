@@ -3,8 +3,11 @@ from models.event import Event
 from models.user import User
 from schemas.event import EventCreate, EventUpdate, EventResponse
 from auth.dependencies import get_current_user
+from models.student import Student
+from services.email_service import email_service
 from typing import List, Optional
 from datetime import datetime
+import asyncio
 
 
 router = APIRouter(prefix="/api/events", tags=["Events"])
@@ -23,6 +26,46 @@ def event_to_response(event: Event) -> EventResponse:
         created_at=event.created_at,
         updated_at=event.updated_at
     )
+
+
+async def notify_students_of_event(event: Event):
+    """Send an email notification to all students about a new event."""
+    try:
+        students = await Student.find(Student.email != None).to_list()
+        emails = [s.email for s in students if s.email]
+        
+        if not emails:
+            return
+            
+        subject = f"New Department Event: {event.title}"
+        body = f"""
+        <h2>{event.title}</h2>
+        <p><strong>Category:</strong> {event.category.title() if event.category else 'General'}</p>
+        <p><strong>Starts:</strong> {event.start_date.strftime('%Y-%m-%d %H:%M')}</p>
+        <p><strong>Ends:</strong> {event.end_date.strftime('%Y-%m-%d %H:%M')}</p>
+        <p><strong>Description:</strong></p>
+        <p>{event.description}</p>
+        <br>
+        <p>Best regards,<br>Department Administration Team</p>
+        """
+        
+        # Send one email to all using BCC to protect privacy
+        # Wait, the current send_email sends to all in "To".
+        # Let's send them in batches or individually so students don't see everyone's email.
+        # Sending individually to avoid exposing emails
+        for email in emails:
+            try:
+                await email_service.send_email(
+                    to_emails=[email],
+                    subject=subject,
+                    body=body,
+                    html=True
+                )
+            except Exception as e:
+                print(f"Failed to send event notification to {email}: {e}")
+                
+    except Exception as e:
+        print(f"Error in notify_students_of_event: {e}")
 
 
 @router.get("", response_model=List[EventResponse])
@@ -95,6 +138,9 @@ async def create_event(
     )
     
     await event.insert()
+    
+    # Notify all students in the background
+    asyncio.create_task(notify_students_of_event(event))
     
     return event_to_response(event)
 

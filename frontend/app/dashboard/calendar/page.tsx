@@ -74,8 +74,18 @@ export default function CalendarPage() {
                             right: 'dayGridMonth,dayGridWeek'
                         }}
                         height="auto"
+                        eventTimeFormat={{
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            meridiem: 'short'
+                        }}
+                        eventDisplay="block"
+                        eventClassNames="p-1 rounded-md shadow-sm border-0 font-medium text-xs cursor-pointer hover:scale-105 transition-transform"
                         eventClick={(info) => {
-                            alert(`Event: ${info.event.title}`)
+                            const event = events.find(e => e.id === info.event.id);
+                            if (event) {
+                                alert(`${event.title}\n\nTime: ${new Date(event.start_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(event.end_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\nCategory: ${event.category}\n\n${event.description || ''}`);
+                            }
                         }}
                     />
                 )}

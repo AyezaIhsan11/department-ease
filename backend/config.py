@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Department Ease"
     CORS_ORIGINS: str = "http://localhost:3000"
+    FRONTEND_URL: str = "http://localhost:3000"
+    BACKEND_URL: str = "http://localhost:8001"
     
     @property
     def cors_origins_list(self) -> List[str]:

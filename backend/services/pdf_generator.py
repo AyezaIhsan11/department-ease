@@ -37,7 +37,7 @@ class PDFReportGenerator:
             spaceBefore=12
         ))
     
-    def generate_monthly_report(self, year: int, month: int) -> io.BytesIO:
+    async def generate_monthly_report(self, year: int, month: int) -> io.BytesIO:
         """Generate monthly student report"""
         
         buffer = io.BytesIO()
@@ -52,16 +52,20 @@ class PDFReportGenerator:
         story.append(title)
         story.append(Spacer(1, 0.3 * inch))
         
-        # Get students enrolled in this month
-        from datetime import datetime
+        # Calculate date range
         start_date = datetime(year, month, 1)
         if month == 12:
             end_date = datetime(year + 1, 1, 1)
         else:
             end_date = datetime(year, month + 1, 1)
         
-        # Note: This is a synchronous function, so we'll need to call it from an async context
-        # For now, we'll create a placeholder
+        # Fetch students enrolled in this month
+        students = await Student.find({
+            "enrollment_date": {
+                "$gte": start_date,
+                "$lt": end_date
+            }
+        }).to_list()
         
         # Summary section
         summary_heading = Paragraph("Report Summary", self.styles['CustomHeading'])
@@ -71,6 +75,7 @@ class PDFReportGenerator:
             ['Metric', 'Value'],
             ['Report Generated', datetime.now().strftime('%Y-%m-%d %H:%M')],
             ['Report Period', f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"],
+            ['New Enrollments', str(len(students))],
         ]
         
         summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
@@ -88,13 +93,44 @@ class PDFReportGenerator:
         story.append(summary_table)
         story.append(Spacer(1, 0.5 * inch))
         
+        # Student Details Table
+        if students:
+            details_heading = Paragraph("New Enrolled Students", self.styles['CustomHeading'])
+            story.append(details_heading)
+            
+            table_data = [['ID', 'Name', 'Department', 'Year', 'GPA']]
+            for s in students:
+                table_data.append([
+                    s.student_id,
+                    f"{s.first_name} {s.last_name}",
+                    s.department,
+                    str(s.year),
+                    str(s.gpa) if s.gpa is not None else "N/A"
+                ])
+            
+            table = Table(table_data, colWidths=[1.2*inch, 2*inch, 1.5*inch, 0.8*inch, 0.8*inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4A90E2')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ]))
+            story.append(table)
+        else:
+            story.append(Paragraph("No new students enrolled in this period.", self.styles['Normal']))
+        
         # Build PDF
         doc.build(story)
         buffer.seek(0)
         
         return buffer
     
-    def generate_yearly_report(self, year: int) -> io.BytesIO:
+    async def generate_yearly_report(self, year: int) -> io.BytesIO:
         """Generate yearly student report"""
         
         buffer = io.BytesIO()
@@ -106,6 +142,17 @@ class PDFReportGenerator:
         story.append(title)
         story.append(Spacer(1, 0.3 * inch))
         
+        # Fetch students enrolled in this year
+        start_date = datetime(year, 1, 1)
+        end_date = datetime(year + 1, 1, 1)
+        
+        students = await Student.find({
+            "enrollment_date": {
+                "$gte": start_date,
+                "$lt": end_date
+            }
+        }).to_list()
+        
         # Summary section
         summary_heading = Paragraph("Annual Summary", self.styles['CustomHeading'])
         story.append(summary_heading)
@@ -114,6 +161,7 @@ class PDFReportGenerator:
             ['Metric', 'Value'],
             ['Report Generated', datetime.now().strftime('%Y-%m-%d %H:%M')],
             ['Academic Year', str(year)],
+            ['Total New Enrollments', str(len(students))],
         ]
         
         summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
@@ -130,6 +178,35 @@ class PDFReportGenerator:
         
         story.append(summary_table)
         story.append(Spacer(1, 0.5 * inch))
+        
+        # Student Details Table
+        if students:
+            details_heading = Paragraph("Students Enrolled This Year", self.styles['CustomHeading'])
+            story.append(details_heading)
+            
+            table_data = [['ID', 'Name', 'Department', 'Year', 'GPA']]
+            for s in students:
+                table_data.append([
+                    s.student_id,
+                    f"{s.first_name} {s.last_name}",
+                    s.department,
+                    str(s.year),
+                    str(s.gpa) if s.gpa is not None else "N/A"
+                ])
+            
+            table = Table(table_data, colWidths=[1.2*inch, 2*inch, 1.5*inch, 0.8*inch, 0.8*inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4A90E2')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ]))
+            story.append(table)
         
         # Build PDF
         doc.build(story)

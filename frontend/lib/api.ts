@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // Create axios instance
 const api = axios.create({
@@ -18,6 +18,10 @@ api.interceptors.request.use(
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`
             }
+        }
+        // Let axios set Content-Type automatically for FormData (includes boundary)
+        if (config.data instanceof FormData) {
+            delete config.headers['Content-Type']
         }
         return config
     },
