@@ -54,6 +54,7 @@ langgraph-sdk==0.3.1
 langsmith==0.5.1
 lazy-model==0.2.0
 motor==3.3.2
+nodeenv==1.10.0
 numpy==2.4.0
 openpyxl==3.1.5
 orjson==3.11.5
@@ -61,6 +62,8 @@ ormsgpack==1.12.1
 packaging==25.0
 pandas==2.3.3
 passlib==1.7.4
+pdfminer.six==20251230
+pdfplumber==0.11.9
 pillow==12.0.0
 prompt_toolkit==3.0.52
 proto-plus==1.27.0
@@ -73,6 +76,8 @@ pydantic-settings==2.12.0
 pydantic_core==2.41.5
 pymongo==4.6.1
 pyparsing==3.3.1
+pypdfium2==5.8.0
+pyright==1.1.408
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.0
 python-jose==3.3.0
