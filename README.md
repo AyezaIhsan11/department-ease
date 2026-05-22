@@ -1,3 +1,12 @@
+---
+title: Department Ease Backend
+emoji: 🎓
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+---
+
 # Department Ease - Backend API
 
 AI-Powered Department Administration System built with FastAPI, MongoDB, and LangChain/Gemini.
