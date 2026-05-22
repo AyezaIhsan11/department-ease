@@ -62,12 +62,12 @@ export default function DashboardPage() {
         <div className="min-h-screen p-6">
             {/* Header */}
             <div className="glass-card-white mb-6 p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gradient">Department Dashboard</h1>
                         <p className="text-gray-600 mt-1">Overview and analytics</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2 md:gap-3">
                         <button
                             onClick={() => router.push('/dashboard/students')}
                             className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition"

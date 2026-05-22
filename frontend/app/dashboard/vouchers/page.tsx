@@ -58,14 +58,14 @@ export default function VouchersPage() {
 
     return (
         <div className="min-h-screen p-6 bg-slate-900">
-            <div className="glass-card-white mb-6 p-6 flex items-center justify-between">
+            <div className="glass-card-white mb-6 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gradient">Fee Vouchers</h1>
                     <p className="text-gray-600 mt-1">Review and verify student fee submissions</p>
                 </div>
                 <button
                     onClick={() => router.push('/dashboard')}
-                    className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                    className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition w-full sm:w-auto text-center"
                 >
                     Back to Dashboard
                 </button>

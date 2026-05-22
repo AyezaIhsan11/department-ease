@@ -108,12 +108,12 @@ export default function StudentsPage() {
             <div className="min-h-screen p-6">
                 {/* Header */}
             <div className="glass-card-white mb-6 p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gradient">Student Management</h1>
                         <p className="text-gray-600 mt-1">Manage all student records</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() => router.push('/dashboard')}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
@@ -150,7 +150,7 @@ export default function StudentsPage() {
                 </div>
 
                 {/* Filters */}
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-4">
                     <input
                         type="text"
                         placeholder="Search by name, ID, or email..."

@@ -51,14 +51,14 @@ export default function ReportsPage() {
         <div className="min-h-screen p-6">
             {/* Header */}
             <div className="glass-card-white mb-6 p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gradient">PDF Reports</h1>
                         <p className="text-gray-600 mt-1">Generate and download reports</p>
                     </div>
                     <button
                         onClick={() => router.push('/dashboard')}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition w-full sm:w-auto text-center"
                     >
                         ← Back to Dashboard
                     </button>

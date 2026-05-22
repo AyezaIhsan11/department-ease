@@ -124,21 +124,21 @@ export default function ChatPage() {
     return (
         <div className="min-h-screen flex flex-col">
             {/* Header */}
-            <header className="glass-card m-4 p-4 flex items-center justify-between">
+            <header className="glass-card m-4 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-white">AI Assistant</h1>
                     <p className="text-white/70 text-sm">Ask me anything about student management</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                     <button
                         onClick={() => router.push('/dashboard')}
-                        className="btn-secondary"
+                        className="btn-secondary flex-1 sm:flex-none text-center"
                     >
                         Dashboard
                     </button>
                     <button
                         onClick={handleLogout}
-                        className="btn-secondary"
+                        className="btn-secondary flex-1 sm:flex-none text-center"
                     >
                         Logout
                     </button>
