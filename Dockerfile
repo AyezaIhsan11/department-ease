@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.11
 
 # Create a non-root user (UID 1000) for Hugging Face Spaces
 RUN useradd -m -u 1000 user
