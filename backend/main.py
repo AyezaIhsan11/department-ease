@@ -26,6 +26,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Database connection middleware for serverless/Vercel support
+@app.middleware("http")
+async def db_connection_middleware(request, call_next):
+    await connect_to_mongo()
+    response = await call_next(request)
+    return response
+
 from fastapi.staticfiles import StaticFiles
 import os
 

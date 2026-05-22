@@ -10,12 +10,16 @@ from models.voucher import Voucher
 
 # Global database client
 db_client: AsyncIOMotorClient = None
+db_initialized = False
 
 
 async def connect_to_mongo():
     """Connect to MongoDB and initialize Beanie ODM"""
-    global db_client
+    global db_client, db_initialized
     
+    if db_initialized:
+        return
+        
     db_client = AsyncIOMotorClient(settings.MONGODB_URL)
     
     await init_beanie(
@@ -29,6 +33,7 @@ async def connect_to_mongo():
         ]
     )
     
+    db_initialized = True
     print(f"Connected to MongoDB: {settings.DATABASE_NAME}")
 
 

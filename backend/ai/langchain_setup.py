@@ -3,10 +3,14 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from config import settings
 from typing import Dict
 
-# Initialize Gemini model
+import os
+
+# Initialize Gemini model with fallback key to avoid startup crashes if not configured
+gemini_key = settings.GEMINI_API_KEY or os.environ.get("GOOGLE_API_KEY") or "DUMMY_GEMINI_KEY"
+
 llm = ChatGoogleGenerativeAI(
     model="gemini-flash-latest",
-    google_api_key=settings.GEMINI_API_KEY,
+    google_api_key=gemini_key,
     temperature=0.3,
     convert_system_message_to_human=True
 )

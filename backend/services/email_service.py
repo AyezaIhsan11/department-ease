@@ -28,6 +28,14 @@ class EmailService:
             attachments: List of (filename, content) tuples
         """
         
+        # Check if SMTP configuration is provided
+        if not settings.SMTP_HOST or not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD or not settings.SMTP_FROM_EMAIL:
+            print(f"SMTP configuration is incomplete. Bypassing real email send. Logging instead:")
+            print(f"To: {to_emails}")
+            print(f"Subject: {subject}")
+            print(f"Body: {body[:200]}...")
+            return
+            
         message = MIMEMultipart()
         message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
         message["To"] = ", ".join(to_emails)
