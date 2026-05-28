@@ -1,4 +1,6 @@
 import aiosmtplib
+import httpx
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -28,6 +30,57 @@ class EmailService:
             attachments: List of (filename, content) tuples
         """
         
+        # 1. Attempt sending via Resend API if API Key is configured
+        if settings.RESEND_API_KEY:
+            print("RESEND_API_KEY is configured. Attempting to send email via Resend API...")
+            
+            from_name = settings.SMTP_FROM_NAME or "Department Ease"
+            from_email = settings.SMTP_FROM_EMAIL or "onboarding@resend.dev"
+            
+            # The free tier of Resend requires sending from onboarding@resend.dev unless domain is verified
+            resend_from = f"{from_name} <{from_email}>"
+            if not from_email or any(provider in from_email for provider in ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"]):
+                resend_from = f"{from_name} <onboarding@resend.dev>"
+                
+            payload = {
+                "from": resend_from,
+                "to": to_emails,
+                "subject": subject,
+                "html" if html else "text": body
+            }
+            
+            if attachments:
+                resend_attachments = []
+                for filename, content in attachments:
+                    b64_content = base64.b64encode(content).decode("utf-8")
+                    resend_attachments.append({
+                        "filename": filename,
+                        "content": b64_content
+                    })
+                payload["attachments"] = resend_attachments
+                
+            headers = {
+                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        "https://api.resend.com/emails",
+                        json=payload,
+                        headers=headers
+                    )
+                    
+                    if response.status_code in [200, 201]:
+                        print(f"Email sent successfully via Resend to {to_emails}")
+                        return
+                    else:
+                        print(f"Resend API Error: Status {response.status_code}: {response.text}. Falling back to SMTP...")
+            except Exception as e:
+                print(f"Resend API Exception: {str(e)}. Falling back to SMTP...")
+
+        # 2. Fallback to standard SMTP sending
         # Check if SMTP configuration is provided
         if not settings.SMTP_HOST or not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD or not settings.SMTP_FROM_EMAIL:
             error_msg = "SMTP configuration is incomplete. Please configure SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, and SMTP_FROM_EMAIL in the environment variables."
@@ -52,30 +105,35 @@ class EmailService:
                 attachment.add_header('Content-Disposition', 'attachment', filename=filename)
                 message.attach(attachment)
         
-        # Send email
-        smtp = aiosmtplib.SMTP(
-            hostname=settings.SMTP_HOST,
-            port=settings.SMTP_PORT,
-            use_tls=(settings.SMTP_PORT == 465)
-        )
-        
+        # Send email via SMTP
+        smtp = None
         try:
-            await smtp.connect()
-            if settings.SMTP_PORT == 587 and not smtp.is_connected:
-                # This part is handled by connect() usually, but let's be explicit if needed
-                pass
+            smtp = aiosmtplib.SMTP(
+                hostname=settings.SMTP_HOST,
+                port=settings.SMTP_PORT,
+                start_tls=False,
+                use_tls=(settings.SMTP_PORT == 465),
+                timeout=5.0,
+            )
             
-            if not smtp.use_tls and settings.SMTP_PORT == 587:
-                try:
-                    await smtp.starttls()
-                except aiosmtplib.errors.SMTPException as e:
-                    if "already using TLS" not in str(e):
-                        raise
+            await smtp.connect()
+            
+            # For port 587, upgrade to TLS via STARTTLS
+            if settings.SMTP_PORT == 587:
+                await smtp.starttls()
             
             await smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
             await smtp.send_message(message)
+            print(f"Email sent successfully via SMTP to {to_emails}")
+        except Exception as e:
+            print(f"SMTP Error: {type(e).__name__}: {e}")
+            raise
         finally:
-            await smtp.quit()
+            if smtp:
+                try:
+                    await smtp.quit()
+                except Exception:
+                    pass
     
     async def send_welcome_email(self, student_email: str, student_name: str):
         """Send welcome email to new student"""

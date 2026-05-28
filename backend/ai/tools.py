@@ -2,7 +2,7 @@ from langchain.tools import tool
 from models.student import Student, StudentStatus
 from models.event import Event, EventCategory
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from services.email_service import email_service
 import os
 import csv
@@ -179,18 +179,19 @@ async def update_student_tool(
         return f"Cannot update field '{field}'. Allowed fields: {', '.join(allowed_fields)}"
     
     # Type conversion
+    converted_value: Any = value
     if field == 'gpa':
-        value = float(value)
+        converted_value = float(value)
     elif field == 'year':
-        value = int(value)
+        converted_value = int(value)
     elif field == 'status':
-        value = StudentStatus(value)
+        converted_value = StudentStatus(value)
     
-    setattr(student, field, value)
-    student.updated_at = datetime.utcnow()
+    setattr(student, field, converted_value)
+    student.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await student.save()
     
-    return f"Successfully updated {field} for student {student_id} to: {value}"
+    return f"Successfully updated {field} for student {student_id} to: {converted_value}"
 
 
 @tool
@@ -330,15 +331,17 @@ async def send_email_tool(
             return f"Error reading attachment: {str(e)}"
     
     try:
-        await email_service.send_email(
-            to_emails=[student.email],
-            subject=subject,
-            body=body,
-            attachments=attachments
+        asyncio.create_task(
+            email_service.send_email(
+                to_emails=[student.email],
+                subject=subject,
+                body=body,
+                attachments=attachments
+            )
         )
-        return f"Successfully sent email to {student.full_name} ({student.email}){ ' with attachment' if attachments else ''}."
+        return f"Successfully queued email to be sent to {student.full_name} ({student.email}) in the background{ ' with attachment' if attachments else ''}."
     except Exception as e:
-        return f"Failed to send email: {str(e)}. (Note: SMTP server might not be configured correctly)"
+        return f"Failed to initiate email sending: {str(e)}."
 
 
 @tool
@@ -372,15 +375,17 @@ async def request_voucher_tool(student_id: str) -> str:
     """
     
     try:
-        await email_service.send_email(
-            to_emails=[student.email],
-            subject=subject,
-            body=body,
-            html=True
+        asyncio.create_task(
+            email_service.send_email(
+                to_emails=[student.email],
+                subject=subject,
+                body=body,
+                html=True
+            )
         )
-        return f"Successfully sent voucher upload request to {student.full_name}."
+        return f"Successfully queued voucher upload request to be sent to {student.full_name} in the background."
     except Exception as e:
-        return f"Failed to send request: {str(e)}"
+        return f"Failed to initiate voucher request: {str(e)}"
 
 
 @tool
@@ -558,7 +563,7 @@ async def import_students_from_pdf_tool(file_path: str) -> str:
                 for table in tables:
                     for row in table:
                         # Clean up None values
-                        clean_row = [str(cell).strip() if cell is not None else "" for cell in row]
+                        clean_row = [cell.strip() if cell is not None else "" for cell in row]
                         # Only add non-empty rows
                         if any(clean_row):
                             rows.append(clean_row)

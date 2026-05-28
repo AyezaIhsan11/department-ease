@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: Optional[str] = None
     SMTP_FROM_NAME: Optional[str] = "Department Ease"
     
+    # Resend Email API (Optional, used if SMTP is blocked in cloud environments)
+    RESEND_API_KEY: Optional[str] = None
+    
     # Redis
     REDIS_URL: Optional[str] = None
     
@@ -38,7 +41,8 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
     
     class Config:
-        env_file = ".env"
+        import os
+        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", ".env") if "backend" not in os.path.basename(os.path.dirname(os.path.abspath(__file__))) else os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
         case_sensitive = True
 
 
