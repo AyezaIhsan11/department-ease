@@ -18,6 +18,8 @@ export default function VouchersPage() {
     const router = useRouter()
     const [vouchers, setVouchers] = useState<Voucher[]>([])
     const [loading, setLoading] = useState(true)
+    const [updating, setUpdating] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         const token = localStorage.getItem('access_token')
@@ -30,21 +32,39 @@ export default function VouchersPage() {
 
     const loadVouchers = async () => {
         try {
+            setError(null)
             const res = await api.get('/api/vouchers')
-            setVouchers(res.data)
-        } catch (error) {
-            console.error('Error loading vouchers:', error)
+            // Normalize IDs — Beanie may return {$oid: "..."} or a plain string
+            const normalized = res.data.map((v: any) => ({
+                ...v,
+                id: v.id?.$oid ?? v.id ?? v._id?.$oid ?? v._id ?? ''
+            }))
+            setVouchers(normalized)
+        } catch (err: any) {
+            const msg = err?.response?.data?.detail || err?.message || 'Failed to load vouchers'
+            setError(msg)
+            console.error('Error loading vouchers:', err)
         } finally {
             setLoading(false)
         }
     }
 
     const updateStatus = async (id: string, status: string) => {
+        if (!id) {
+            setError('Voucher ID is missing — cannot update status.')
+            return
+        }
         try {
+            setUpdating(id)
+            setError(null)
             await api.patch(`/api/vouchers/${id}/status?status=${status}`)
-            loadVouchers()
-        } catch (error) {
-            console.error('Error updating status:', error)
+            await loadVouchers()
+        } catch (err: any) {
+            const msg = err?.response?.data?.detail || err?.message || 'Failed to update voucher status'
+            setError(`Error: ${msg}`)
+            console.error('Error updating status:', err)
+        } finally {
+            setUpdating(null)
         }
     }
 
@@ -70,6 +90,12 @@ export default function VouchersPage() {
                     Back to Dashboard
                 </button>
             </div>
+
+            {error && (
+                <div className="mb-6 p-4 bg-red-100 border border-red-300 text-red-700 rounded-lg">
+                    ⚠️ {error}
+                </div>
+            )}
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {vouchers.map((voucher) => (
@@ -110,15 +136,25 @@ export default function VouchersPage() {
                                 <>
                                     <button 
                                         onClick={() => updateStatus(voucher.id, 'verified')}
-                                        className="px-3 py-2 bg-green-500 text-white rounded text-sm font-semibold hover:bg-green-600 transition"
+                                        disabled={updating === voucher.id}
+                                        className={`px-3 py-2 rounded text-sm font-semibold text-white transition ${
+                                            updating === voucher.id 
+                                            ? 'bg-green-300 cursor-not-allowed' 
+                                            : 'bg-green-500 hover:bg-green-600'
+                                        }`}
                                     >
-                                        Verify
+                                        {updating === voucher.id ? '...' : 'Verify'}
                                     </button>
                                     <button 
                                         onClick={() => updateStatus(voucher.id, 'rejected')}
-                                        className="px-3 py-2 bg-red-500 text-white rounded text-sm font-semibold hover:bg-red-600 transition"
+                                        disabled={updating === voucher.id}
+                                        className={`px-3 py-2 rounded text-sm font-semibold text-white transition ${
+                                            updating === voucher.id 
+                                            ? 'bg-red-300 cursor-not-allowed' 
+                                            : 'bg-red-500 hover:bg-red-600'
+                                        }`}
                                     >
-                                        Reject
+                                        {updating === voucher.id ? '...' : 'Reject'}
                                     </button>
                                 </>
                             )}
