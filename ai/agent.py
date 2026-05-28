@@ -4,6 +4,22 @@ from ai.langchain_setup import llm, SYSTEM_PROMPT
 from ai.tools import STUDENT_TOOLS
 from typing import Dict, Any
 import uuid
+import asyncio
+import re
+
+
+def _parse_retry_delay(error_str: str) -> int:
+    """Extract retry delay in seconds from a RESOURCE_EXHAUSTED error message."""
+    match = re.search(r'retry[_ ]in[_ ](\d+)', error_str, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return 60  # default 60s if not parseable
+
+
+def _is_quota_error(error: Exception) -> bool:
+    """Check if the error is a Gemini API quota/rate-limit error."""
+    msg = str(error).upper()
+    return "RESOURCE_EXHAUSTED" in msg or "429" in msg or "QUOTA" in msg
 
 
 class StudentManagementAgent:
@@ -24,15 +40,18 @@ class StudentManagementAgent:
         self,
         message: str,
         conversation_id: Any = None,
-        attachment_path: str = None
+        attachment_path: str = None,
+        max_retries: int = 2
     ) -> Dict[str, Any]:
         """
-        Process a natural language message and execute appropriate actions
+        Process a natural language message and execute appropriate actions.
+        Automatically retries on Gemini rate-limit (429) errors with backoff.
         
         Args:
             message: User's message
             conversation_id: Conversation ID for context
             attachment_path: Path to an uploaded file
+            max_retries: Number of retry attempts on quota errors
         
         Returns:
             Dictionary with response and action details
@@ -50,43 +69,78 @@ class StudentManagementAgent:
             full_message += f"\n\n[USER UPLOADED FILE: {attachment_path}]"
             full_message += "\n(You can use this path in the send_email_tool if the user wants to send this file as an attachment)"
         
-        try:
-            # Run agent
-            result = await self.agent.ainvoke(
-                {"messages": [("human", full_message)]},
-                config=config
-            )
-            
-            content = result["messages"][-1].content
-            if isinstance(content, list):
-                response = " ".join([part.get("text", "") if isinstance(part, dict) else str(part) for part in content])
-            else:
-                response = str(content)
-            
-            # Determine action taken
-            action_taken = None
-            response_lower = response.lower()
-            if "successfully created" in response_lower:
-                action_taken = {"action": "create_student"}
-            elif "successfully updated" in response_lower:
-                action_taken = {"action": "update_student"}
-            elif "successfully deleted" in response_lower:
-                action_taken = {"action": "delete_student"}
-            elif "found" in response_lower and "student" in response_lower:
-                action_taken = {"action": "search_students"}
-            
-            return {
-                "response": response,
-                "conversation_id": conversation_id,
-                "action_taken": action_taken
-            }
-            
-        except Exception as e:
-            return {
-                "response": f"I encountered an error: {str(e)}. Please try rephrasing your request.",
-                "conversation_id": conversation_id,
-                "action_taken": None
-            }
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                # Run agent
+                result = await self.agent.ainvoke(
+                    {"messages": [("human", full_message)]},
+                    config=config
+                )
+                
+                content = result["messages"][-1].content
+                if isinstance(content, list):
+                    response = " ".join([part.get("text", "") if isinstance(part, dict) else str(part) for part in content])
+                else:
+                    response = str(content)
+                
+                # Determine action taken
+                action_taken = None
+                response_lower = response.lower()
+                if "successfully created" in response_lower:
+                    action_taken = {"action": "create_student"}
+                elif "successfully updated" in response_lower:
+                    action_taken = {"action": "update_student"}
+                elif "successfully deleted" in response_lower:
+                    action_taken = {"action": "delete_student"}
+                elif "found" in response_lower and "student" in response_lower:
+                    action_taken = {"action": "search_students"}
+                
+                return {
+                    "response": response,
+                    "conversation_id": conversation_id,
+                    "action_taken": action_taken
+                }
+                
+            except Exception as e:
+                last_error = e
+                
+                if _is_quota_error(e):
+                    retry_delay = _parse_retry_delay(str(e))
+                    
+                    if attempt < max_retries:
+                        # Wait and retry
+                        wait_time = min(retry_delay, 45)  # cap at 45s per attempt
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        # All retries exhausted — return friendly message
+                        return {
+                            "response": (
+                                f"⚠️ The AI assistant is temporarily unavailable because the daily request quota "
+                                f"for the Gemini API has been exceeded (free tier limit).\n\n"
+                                f"**Please try again in about {retry_delay} seconds**, or wait a few minutes "
+                                f"for the quota to reset.\n\n"
+                                f"💡 *Tip: If this happens frequently, the Gemini API key can be upgraded to a "
+                                f"paid plan at https://ai.google.dev for unlimited requests.*"
+                            ),
+                            "conversation_id": conversation_id,
+                            "action_taken": None
+                        }
+                else:
+                    # Non-quota error — don't retry
+                    return {
+                        "response": f"I encountered an error: {str(e)}. Please try rephrasing your request.",
+                        "conversation_id": conversation_id,
+                        "action_taken": None
+                    }
+        
+        # Fallback (should not be reached)
+        return {
+            "response": f"Sorry, something went wrong: {str(last_error)}",
+            "conversation_id": conversation_id,
+            "action_taken": None
+        }
 
 
 # Global agent instance
