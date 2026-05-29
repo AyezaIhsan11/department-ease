@@ -218,6 +218,7 @@ class EmailService:
             attachments: List of (filename, bytes) tuples
         """
         if settings.BREVO_API_KEY:
+            print(f"[Email Service] Sending via Brevo HTTP API to: {to_emails}")
             await self._send_via_brevo(
                 to_emails=to_emails,
                 subject=subject,
@@ -226,6 +227,7 @@ class EmailService:
                 attachments=attachments,
             )
         elif settings.RESEND_API_KEY:
+            print(f"[Email Service] Sending via Resend HTTP API to: {to_emails}")
             await self._send_via_resend(
                 to_emails=to_emails,
                 subject=subject,
@@ -234,6 +236,7 @@ class EmailService:
                 attachments=attachments,
             )
         else:
+            print(f"[Email Service] Falling back to SMTP to: {to_emails} (Host: {settings.SMTP_HOST})")
             await self._send_via_smtp(
                 to_emails=to_emails,
                 subject=subject,

@@ -69,14 +69,18 @@ class StudentManagementAgent:
             full_message += f"\n\n[USER UPLOADED FILE: {attachment_path}]"
             full_message += "\n(You can use this path in the send_email_tool if the user wants to send this file as an attachment)"
         
+        print(f"[AI Agent] Received message: '{message}' (conversation_id: {conversation_id})")
+        
         last_error = None
         for attempt in range(max_retries + 1):
             try:
+                print(f"[AI Agent] Invoking Gemini model (attempt {attempt + 1})...")
                 # Run agent
                 result = await self.agent.ainvoke(
                     {"messages": [("human", full_message)]},
                     config=config
                 )
+                print(f"[AI Agent] Model invoked successfully!")
                 
                 content = result["messages"][-1].content
                 if isinstance(content, list):
