@@ -2,7 +2,7 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
 from ai.langchain_setup import llm, SYSTEM_PROMPT
 from ai.tools import STUDENT_TOOLS
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import uuid
 import asyncio
 import re
