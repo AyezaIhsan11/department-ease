@@ -376,6 +376,69 @@ class StudentManagementAgent:
                 "action_taken": {"action": "search_students"}
             }
             
+        # 5. LIST ALL STUDENTS
+        if re.search(r'(?:show|list|get|display)\s+(?:all\s+)?students', msg, re.IGNORECASE) or msg.strip() in ["list students", "show students", "all students"]:
+            students = await Student.find().limit(20).to_list()
+            if not students:
+                return {
+                    "response": "No students found in the database.",
+                    "action_taken": None
+                }
+            result = f"**Found {len(students)} student(s):**\n\n"
+            for s in students:
+                result += f"- **{s.full_name}** (ID: `{s.student_id}`) — {s.department}, Year {s.year}, Status: {s.status}\n"
+            return {
+                "response": result,
+                "action_taken": {"action": "search_students"}
+            }
+
+        # 6. GET STATISTICS
+        if re.search(r'(?:show|get|display)?\s*(?:statistics|stats|overview|summary)', msg, re.IGNORECASE):
+            from models.student import Student, StudentStatus
+            total = await Student.find().count()
+            active = await Student.find(Student.status == StudentStatus.ACTIVE).count()
+            all_with_gpa = await Student.find(Student.gpa != None).to_list()
+            avg_gpa = sum(s.gpa for s in all_with_gpa if s.gpa) / len(all_with_gpa) if all_with_gpa else 0
+            return {
+                "response": f"""📊 **Department Statistics:**
+
+- **Total Students:** {total}
+- **Active Students:** {active}
+- **Average GPA:** {avg_gpa:.2f}""",
+                "action_taken": None
+            }
+
+        # 7. DELETE STUDENT
+        delete_match = re.search(r'(?:delete|remove)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)(?:\s+from\s+(?:the\s+)?(?:system|database|records?))?$', msg, re.IGNORECASE)
+        if delete_match:
+            target = delete_match.group(1).strip().strip("'\"")
+            student = None
+            if "@" in target:
+                student = await Student.find_one(Student.email == target)
+            else:
+                student = await Student.find_one(Student.student_id == target.upper())
+                if not student:
+                    students_found = await Student.find({
+                        "$or": [
+                            {"first_name": {"$regex": target, "$options": "i"}},
+                            {"last_name": {"$regex": target, "$options": "i"}}
+                        ]
+                    }).to_list()
+                    if students_found:
+                        student = students_found[0]
+            if not student:
+                return {
+                    "response": f"I couldn't find a student matching '{target}' to delete.",
+                    "action_taken": None
+                }
+            name = student.full_name
+            sid = student.student_id
+            await student.delete()
+            return {
+                "response": f"🗑️ Successfully deleted student record for **{name}** (ID: `{sid}`).",
+                "action_taken": {"action": "delete_student"}
+            }
+
         return None
 
     async def process_message(
@@ -483,15 +546,20 @@ class StudentManagementAgent:
                         await asyncio.sleep(wait_time)
                         continue
                     else:
-                        # All retries exhausted — return friendly message
+                        # All retries exhausted — return friendly message with supported commands
                         return {
                             "response": (
-                                f"⚠️ The AI assistant is temporarily unavailable because the daily request quota "
-                                f"for the Gemini API has been exceeded (free tier limit).\n\n"
-                                f"**Please try again in about {retry_delay} seconds**, or wait a few minutes "
-                                f"for the quota to reset.\n\n"
-                                f"💡 *Tip: If this happens frequently, the Gemini API key can be upgraded to a "
-                                f"paid plan at https://ai.google.dev for unlimited requests.*"
+                                f"⚠️ The AI assistant is temporarily unavailable due to Gemini API quota limits.\n\n"
+                                f"However, these commands work **without** Gemini and will succeed immediately:\n\n"
+                                f"📧 **Email:** `send mail to [name]`\n"
+                                f"📋 **Voucher:** `send mail to [name] to upload voucher`\n"
+                                f"📱 **Update contact:** `update mobile no of [name] to [number]`\n"
+                                f"📊 **Update GPA:** `update gpa of [name] to [value]`\n"
+                                f"🎓 **Update status:** `update status of [name] to active/graduated`\n"
+                                f"👤 **View student:** `show details of [name]`\n"
+                                f"📃 **List students:** `list all students`\n"
+                                f"📈 **Statistics:** `show statistics`\n"
+                                f"🗑️ **Delete student:** `delete student [name or ID]`"
                             ),
                             "conversation_id": conversation_id,
                             "action_taken": None
