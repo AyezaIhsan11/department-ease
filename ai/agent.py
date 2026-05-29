@@ -108,6 +108,15 @@ class StudentManagementAgent:
                 
             except Exception as e:
                 last_error = e
+                # Print key details and error for debugging
+                key_to_show = "None"
+                if hasattr(self.llm, "google_api_key") and self.llm.google_api_key:
+                    k = self.llm.google_api_key
+                    if len(k) > 10:
+                        key_to_show = f"{k[:6]}...{k[-6:]}"
+                    else:
+                        key_to_show = "SHORT_KEY"
+                print(f"[AI Agent] Attempt {attempt + 1} failed. API Key used: {key_to_show}. Error: {str(e)}")
                 
                 if _is_quota_error(e):
                     retry_delay = _parse_retry_delay(str(e))
@@ -115,6 +124,7 @@ class StudentManagementAgent:
                     if attempt < max_retries:
                         # Wait and retry
                         wait_time = min(retry_delay, 45)  # cap at 45s per attempt
+                        print(f"[AI Agent] Quota error detected. Retrying in {wait_time}s...")
                         await asyncio.sleep(wait_time)
                         continue
                     else:
