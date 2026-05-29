@@ -36,6 +36,265 @@ class StudentManagementAgent:
             checkpointer=self.memory
         )
     
+    async def _handle_fallback(self, message: str, attachment_path: str = None) -> Optional[Dict[str, Any]]:
+        """
+        A rule-based fallback parser that executes common commands if the Gemini API is unavailable.
+        Returns a response dictionary if matched and executed, otherwise None.
+        """
+        from models.student import Student, StudentStatus
+        from services.email_service import email_service
+        from config import settings
+        import os
+        
+        msg = message.strip().lower()
+        
+        # 1. SEND EMAIL
+        # Pattern: "send mail to [recipient]" or "send email to [recipient]" with optional subject/body
+        email_match = re.search(r'send\s+(?:a\s+)?(?:mail|email)\s+to\s+([^\s]+(?:@[^\s]+)?)(?:\s+with\s+subject\s+(.+?)\s+and\s+body\s+(.+))?', msg, re.IGNORECASE)
+        if not email_match:
+            email_match = re.search(r'send\s+(?:a\s+)?(?:mail|email)\s+to\s+([^\s]+(?:@[^\s]+)?)', msg, re.IGNORECASE)
+            
+        if email_match:
+            target = email_match.group(1).strip().strip("'\"")
+            
+            # Default subject/body if not specified
+            subject = "Notification from Department Administration"
+            body = "Hello, this is an automated notification from the Department Administration System."
+            
+            if len(email_match.groups()) >= 3 and email_match.group(2) and email_match.group(3):
+                subject = email_match.group(2).strip().strip("'\"")
+                body = email_match.group(3).strip().strip("'\"")
+                
+            # Find the student
+            student = None
+            if "@" in target:
+                student = await Student.find_one(Student.email == target)
+            else:
+                # Try finding by student_id
+                student = await Student.find_one(Student.student_id == target.upper())
+                if not student:
+                    # Search by first name or last name
+                    students = await Student.find({
+                        "$or": [
+                            {"first_name": {"$regex": target, "$options": "i"}},
+                            {"last_name": {"$regex": target, "$options": "i"}}
+                        ]
+                    }).to_list()
+                    if students:
+                        student = students[0]
+            
+            if not student:
+                return {
+                    "response": f"I tried to send an email, but I couldn't find a student matching '{target}' in the database.",
+                    "action_taken": None
+                }
+                
+            if not student.email:
+                return {
+                    "response": f"Student '{student.full_name}' was found, but they do not have a registered email address.",
+                    "action_taken": None
+                }
+                
+            # Handle attachment
+            attachments = None
+            if attachment_path:
+                try:
+                    if os.path.exists(attachment_path):
+                        filename = os.path.basename(attachment_path)
+                        with open(attachment_path, "rb") as f:
+                            content = f.read()
+                        attachments = [(filename, content)]
+                except Exception as e:
+                    print(f"Fallback reading attachment failed: {e}")
+                    
+            # Send the email
+            try:
+                await email_service.send_email(
+                    to_emails=[student.email],
+                    subject=subject,
+                    body=body,
+                    attachments=attachments
+                )
+                return {
+                    "response": f"✉️ Email sent successfully to {student.full_name} ({student.email})!\n\n**Subject:** {subject}\n**Body:** {body}",
+                    "action_taken": {"action": "send_email"}
+                }
+            except Exception as e:
+                return {
+                    "response": f"Failed to send email to {student.full_name}: {str(e)}",
+                    "action_taken": None
+                }
+
+        # 2. REQUEST FEE VOUCHER UPLOAD
+        # Pattern: "request voucher from [recipient]" or "ask [recipient] to upload voucher"
+        voucher_match = re.search(r'(?:request\s+voucher\s+from|ask\s+([^\s]+)\s+to\s+upload\s+voucher|send\s+voucher\s+request\s+to)\s+([^\s]+(?:@[^\s]+)?)', msg, re.IGNORECASE)
+        if not voucher_match:
+            # Try simpler: "request voucher [recipient]"
+            voucher_match = re.search(r'request\s+voucher\s+([^\s]+(?:@[^\s]+)?)', msg, re.IGNORECASE)
+            
+        if voucher_match:
+            target = (voucher_match.group(2) or voucher_match.group(1) or voucher_match.group(0).split()[-1]).strip().strip("'\"")
+            
+            # Find the student
+            student = None
+            if "@" in target:
+                student = await Student.find_one(Student.email == target)
+            else:
+                student = await Student.find_one(Student.student_id == target.upper())
+                if not student:
+                    students = await Student.find({
+                        "$or": [
+                            {"first_name": {"$regex": target, "$options": "i"}},
+                            {"last_name": {"$regex": target, "$options": "i"}}
+                        ]
+                    }).to_list()
+                    if students:
+                        student = students[0]
+                        
+            if not student:
+                return {
+                    "response": f"I couldn't find a student matching '{target}' to request a fee voucher from.",
+                    "action_taken": None
+                }
+                
+            upload_url = f"{settings.FRONTEND_URL}/upload-voucher/{student.student_id}"
+            subject = "Action Required: Please Upload Your Fee Voucher"
+            body = f"""
+            <h2>Hello {student.first_name},</h2>
+            <p>Please upload a clear picture of your paid fee voucher to complete your registration process.</p>
+            <p>You can upload it by clicking the link below:</p>
+            <p><a href="{upload_url}" style="display:inline-block;padding:10px 20px;background-color:#0ea5e9;color:white;text-decoration:none;border-radius:5px;">Upload Fee Voucher</a></p>
+            <p>If the button doesn't work, copy and paste this link: {upload_url}</p>
+            <br>
+            <p>Best regards,<br>Department Administration Team</p>
+            """
+            
+            try:
+                await email_service.send_email(
+                    to_emails=[student.email],
+                    subject=subject,
+                    body=body,
+                    html=True
+                )
+                return {
+                    "response": f"✅ Successfully sent a fee voucher upload request email to {student.full_name} ({student.email}).",
+                    "action_taken": {"action": "request_voucher"}
+                }
+            except Exception as e:
+                return {
+                    "response": f"Failed to send voucher request to {student.full_name}: {str(e)}",
+                    "action_taken": None
+                }
+
+        # 3. UPDATE STUDENT CONTACT NUMBER OR OTHER FIELDS
+        # Pattern: "update [student_id] contact to [number]"
+        update_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9]+)\s+(?:phone|number|contact)\s+to\s+([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
+        if update_match:
+            student_id = update_match.group(1).upper().strip()
+            new_number = update_match.group(2).strip()
+            
+            student = await Student.find_one(Student.student_id == student_id)
+            if not student:
+                return {
+                    "response": f"I couldn't find a student with ID '{student_id}' to update.",
+                    "action_taken": None
+                }
+                
+            student.contact_number = new_number
+            student.updated_at = datetime.utcnow()
+            await student.save()
+            
+            return {
+                "response": f"📱 Successfully updated the contact number for {student.full_name} (ID: {student_id}) to: {new_number}",
+                "action_taken": {"action": "update_student"}
+            }
+
+        # Update GPA
+        gpa_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9]+)\s+gpa\s+to\s+([0-9\.]+)', msg, re.IGNORECASE)
+        if gpa_match:
+            student_id = gpa_match.group(1).upper().strip()
+            new_gpa = float(gpa_match.group(2).strip())
+            
+            student = await Student.find_one(Student.student_id == student_id)
+            if not student:
+                return {
+                    "response": f"I couldn't find a student with ID '{student_id}' to update GPA.",
+                    "action_taken": None
+                }
+                
+            student.gpa = new_gpa
+            student.updated_at = datetime.utcnow()
+            await student.save()
+            return {
+                "response": f"📊 Successfully updated the GPA for {student.full_name} (ID: {student_id}) to: {new_gpa}",
+                "action_taken": {"action": "update_student"}
+            }
+
+        # Update Status
+        status_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9]+)\s+status\s+to\s+(active|inactive|graduated)', msg, re.IGNORECASE)
+        if status_match:
+            student_id = status_match.group(1).upper().strip()
+            new_status = status_match.group(2).strip().lower()
+            
+            student = await Student.find_one(Student.student_id == student_id)
+            if not student:
+                return {
+                    "response": f"I couldn't find a student with ID '{student_id}' to update status.",
+                    "action_taken": None
+                }
+                
+            student.status = StudentStatus(new_status)
+            student.updated_at = datetime.utcnow()
+            await student.save()
+            return {
+                "response": f"🎓 Successfully updated the status for {student.full_name} (ID: {student_id}) to: {new_status}",
+                "action_taken": {"action": "update_student"}
+            }
+
+        # 4. SHOW DETAILS OF A STUDENT
+        # Pattern: "show details of [student_id]" or "show details of [name]"
+        show_match = re.search(r'(?:show\s+details\s+of|view\s+student|get\s+details\s+for)\s+([a-zA-Z0-9\-\.\@ ]+)', msg, re.IGNORECASE)
+        if show_match:
+            target = show_match.group(1).strip().strip("'\"")
+            student = None
+            if "@" in target:
+                student = await Student.find_one(Student.email == target)
+            else:
+                student = await Student.find_one(Student.student_id == target.upper())
+                if not student:
+                    students = await Student.find({
+                        "$or": [
+                            {"first_name": {"$regex": target, "$options": "i"}},
+                            {"last_name": {"$regex": target, "$options": "i"}}
+                        ]
+                    }).to_list()
+                    if students:
+                        student = students[0]
+                        
+            if not student:
+                return {
+                    "response": f"I couldn't find a student matching '{target}' to show details.",
+                    "action_taken": None
+                }
+                
+            details = f"""
+### Student Details for {student.full_name}:
+- **Student ID:** {student.student_id}
+- **Email:** {student.email}
+- **Department:** {student.department}
+- **Year:** {student.year}
+- **Status:** {student.status}
+- **GPA:** {student.gpa if student.gpa else 'N/A'}
+- **Contact Number:** {student.contact_number if student.contact_number else 'N/A'}
+- **Enrollment Date:** {student.enrollment_date.strftime('%Y-%m-%d')}
+"""
+            return {
+                "response": details,
+                "action_taken": {"action": "search_students"}
+            }
+            
+        return None
+
     async def process_message(
         self,
         message: str,
@@ -63,6 +322,13 @@ class StudentManagementAgent:
             
         config = {"configurable": {"thread_id": conversation_id}}
         
+        # Try fallback rule-based parser first (highly robust, works even without Gemini quota)
+        fallback_res = await self._handle_fallback(message, attachment_path)
+        if fallback_res:
+            print(f"[AI Agent] Fallback parser matched and executed message: '{message}'")
+            fallback_res["conversation_id"] = conversation_id
+            return fallback_res
+            
         # Add attachment info to message if present
         full_message = message
         if attachment_path:
@@ -120,11 +386,16 @@ class StudentManagementAgent:
                 print(f"[AI Agent] Attempt {attempt + 1} failed. API Key used: {key_to_show}. Error: {str(e)}")
                 
                 if _is_quota_error(e):
+                    # If the project is permanently blocked (limit is 0), don't sleep or retry at all
+                    if "limit: 0" in str(e).lower() or "limit: 0" in repr(e).lower():
+                        print(f"[AI Agent] Quota limit is 0 (blocked/disabled). Skipping retries.")
+                        break
+                        
                     retry_delay = _parse_retry_delay(str(e))
                     
                     if attempt < max_retries:
                         # Wait and retry
-                        wait_time = min(retry_delay, 45)  # cap at 45s per attempt
+                        wait_time = min(retry_delay, 5)  # cap at 5s to avoid web timeouts!
                         print(f"[AI Agent] Quota error detected. Retrying in {wait_time}s...")
                         await asyncio.sleep(wait_time)
                         continue
