@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Gemini AI
     GEMINI_API_KEY: Optional[str] = None
     
+    # Resend Email API
+    RESEND_API_KEY: Optional[str] = None
+    
     # SMTP
     SMTP_HOST: Optional[str] = "smtp.gmail.com"
     SMTP_PORT: Optional[int] = 587
@@ -38,7 +41,7 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
     
     class Config:
-        env_file = ".env"
+        env_file = (".env", "backend/.env")  # root first, then backend/ for local dev
         case_sensitive = True
 
 
