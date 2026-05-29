@@ -112,8 +112,9 @@ class StudentManagementAgent:
                 key_to_show = "None"
                 if hasattr(self.llm, "google_api_key") and self.llm.google_api_key:
                     k = self.llm.google_api_key
-                    if len(k) > 10:
-                        key_to_show = f"{k[:6]}...{k[-6:]}"
+                    k_str = k.get_secret_value() if hasattr(k, "get_secret_value") else str(k)
+                    if len(k_str) > 10:
+                        key_to_show = f"{k_str[:6]}...{k_str[-6:]}"
                     else:
                         key_to_show = "SHORT_KEY"
                 print(f"[AI Agent] Attempt {attempt + 1} failed. API Key used: {key_to_show}. Error: {str(e)}")
