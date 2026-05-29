@@ -49,7 +49,81 @@ class StudentManagementAgent:
         
         msg = message.strip().lower()
         
-        # 1. SEND EMAIL
+        # 1. REQUEST FEE VOUCHER UPLOAD (Checked first to intercept voucher requests before general emails)
+        # Check if the message contains "voucher" or "vouche"
+        if "voucher" in msg or "vouche" in msg:
+            # Try to extract target name/email
+            # Pattern A: ... to [name] to upload voucher ...
+            voucher_match = re.search(r'(?:to|from|ask)\s+([a-zA-Z0-9_ ]+?)\s+(?:to|for|upload|voucher|vouche)', msg, re.IGNORECASE)
+            # Pattern B: ... voucher/upload from/to/of [name]
+            if not voucher_match:
+                voucher_match = re.search(r'(?:voucher|vouche|upload)\s+(?:from|to|for|of)\s+([a-zA-Z0-9_ ]+)', msg, re.IGNORECASE)
+            # Pattern C: request voucher [name]
+            if not voucher_match:
+                voucher_match = re.search(r'voucher\s+([a-zA-Z0-9_ ]+)', msg, re.IGNORECASE)
+                
+            if voucher_match:
+                target = voucher_match.group(1).strip().strip("'\"")
+                # Clean up if matched "the student" or similar
+                if target.startswith("the student "):
+                    target = target[12:]
+                elif target.startswith("student "):
+                    target = target[8:]
+                elif target.startswith("the "):
+                    target = target[4:]
+                    
+                # Find the student
+                student = None
+                if "@" in target:
+                    student = await Student.find_one(Student.email == target)
+                else:
+                    student = await Student.find_one(Student.student_id == target.upper())
+                    if not student:
+                        students = await Student.find({
+                            "$or": [
+                                {"first_name": {"$regex": target, "$options": "i"}},
+                                {"last_name": {"$regex": target, "$options": "i"}}
+                            ]
+                        }).to_list()
+                        if students:
+                            student = students[0]
+                            
+                if not student:
+                    return {
+                        "response": f"I couldn't find a student matching '{target}' to request a fee voucher from.",
+                        "action_taken": None
+                    }
+                    
+                upload_url = f"{settings.FRONTEND_URL}/upload-voucher/{student.student_id}"
+                subject = "Action Required: Please Upload Your Fee Voucher"
+                body = f"""
+                <h2>Hello {student.first_name},</h2>
+                <p>Please upload a clear picture of your paid fee voucher to complete your registration process.</p>
+                <p>You can upload it by clicking the link below:</p>
+                <p><a href="{upload_url}" style="display:inline-block;padding:10px 20px;background-color:#0ea5e9;color:white;text-decoration:none;border-radius:5px;">Upload Fee Voucher</a></p>
+                <p>If the button doesn't work, copy and paste this link: {upload_url}</p>
+                <br>
+                <p>Best regards,<br>Department Administration Team</p>
+                """
+                
+                try:
+                    await email_service.send_email(
+                        to_emails=[student.email],
+                        subject=subject,
+                        body=body,
+                        html=True
+                    )
+                    return {
+                        "response": f"✅ Successfully sent a fee voucher upload request email to {student.full_name} ({student.email}).",
+                        "action_taken": {"action": "request_voucher"}
+                    }
+                except Exception as e:
+                    return {
+                        "response": f"Failed to send voucher request to {student.full_name}: {str(e)}",
+                        "action_taken": None
+                    }
+
+        # 2. SEND EMAIL
         # Pattern: "send mail to [recipient]" or "send email to [recipient]" with optional subject/body
         email_match = re.search(r'send\s+(?:a\s+)?(?:mail|email)\s+to\s+([^\s]+(?:@[^\s]+)?)(?:\s+with\s+subject\s+(.+?)\s+and\s+body\s+(.+))?', msg, re.IGNORECASE)
         if not email_match:
@@ -123,67 +197,6 @@ class StudentManagementAgent:
             except Exception as e:
                 return {
                     "response": f"Failed to send email to {student.full_name}: {str(e)}",
-                    "action_taken": None
-                }
-
-        # 2. REQUEST FEE VOUCHER UPLOAD
-        # Pattern: "request voucher from [recipient]" or "ask [recipient] to upload voucher"
-        voucher_match = re.search(r'(?:request\s+voucher\s+from|ask\s+([^\s]+)\s+to\s+upload\s+voucher|send\s+voucher\s+request\s+to)\s+([^\s]+(?:@[^\s]+)?)', msg, re.IGNORECASE)
-        if not voucher_match:
-            # Try simpler: "request voucher [recipient]"
-            voucher_match = re.search(r'request\s+voucher\s+([^\s]+(?:@[^\s]+)?)', msg, re.IGNORECASE)
-            
-        if voucher_match:
-            target = (voucher_match.group(2) or voucher_match.group(1) or voucher_match.group(0).split()[-1]).strip().strip("'\"")
-            
-            # Find the student
-            student = None
-            if "@" in target:
-                student = await Student.find_one(Student.email == target)
-            else:
-                student = await Student.find_one(Student.student_id == target.upper())
-                if not student:
-                    students = await Student.find({
-                        "$or": [
-                            {"first_name": {"$regex": target, "$options": "i"}},
-                            {"last_name": {"$regex": target, "$options": "i"}}
-                        ]
-                    }).to_list()
-                    if students:
-                        student = students[0]
-                        
-            if not student:
-                return {
-                    "response": f"I couldn't find a student matching '{target}' to request a fee voucher from.",
-                    "action_taken": None
-                }
-                
-            upload_url = f"{settings.FRONTEND_URL}/upload-voucher/{student.student_id}"
-            subject = "Action Required: Please Upload Your Fee Voucher"
-            body = f"""
-            <h2>Hello {student.first_name},</h2>
-            <p>Please upload a clear picture of your paid fee voucher to complete your registration process.</p>
-            <p>You can upload it by clicking the link below:</p>
-            <p><a href="{upload_url}" style="display:inline-block;padding:10px 20px;background-color:#0ea5e9;color:white;text-decoration:none;border-radius:5px;">Upload Fee Voucher</a></p>
-            <p>If the button doesn't work, copy and paste this link: {upload_url}</p>
-            <br>
-            <p>Best regards,<br>Department Administration Team</p>
-            """
-            
-            try:
-                await email_service.send_email(
-                    to_emails=[student.email],
-                    subject=subject,
-                    body=body,
-                    html=True
-                )
-                return {
-                    "response": f"✅ Successfully sent a fee voucher upload request email to {student.full_name} ({student.email}).",
-                    "action_taken": {"action": "request_voucher"}
-                }
-            except Exception as e:
-                return {
-                    "response": f"Failed to send voucher request to {student.full_name}: {str(e)}",
                     "action_taken": None
                 }
 
