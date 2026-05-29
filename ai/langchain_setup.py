@@ -9,7 +9,7 @@ import os
 gemini_key = settings.GEMINI_API_KEY or os.environ.get("GOOGLE_API_KEY") or "DUMMY_GEMINI_KEY"
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash-lite",
     google_api_key=gemini_key,
     temperature=0.3,
     convert_system_message_to_human=True
