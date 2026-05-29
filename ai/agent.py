@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 import uuid
 import asyncio
 import re
+import datetime
 
 
 def _parse_retry_delay(error_str: str) -> int:
@@ -187,67 +188,136 @@ class StudentManagementAgent:
                 }
 
         # 3. UPDATE STUDENT CONTACT NUMBER OR OTHER FIELDS
-        # Pattern: "update [student_id] contact to [number]"
-        update_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9]+)\s+(?:phone|number|contact)\s+to\s+([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
+        # Property list matching contact info
+        prop_phone = r'(?:phone|mobile|number|contact|contact_number|mobile_number|mobile\s+number|mobile\s+no|phone\s+number|contact\s+number|mob|phone\s+no)'
+        
+        # Pattern A: update/change mobile of [name/id] to [val]
+        update_match = re.search(rf'(?:update|change)\s+(?:the\s+)?{prop_phone}\s+of\s+([a-zA-Z0-9_ ]+?)\s+to\s+([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
+        # Pattern B: update/change [name/id]\'s mobile to [val]
+        if not update_match:
+            update_match = re.search(rf'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)\'s\s+{prop_phone}\s+to\s+([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
+        # Pattern C: update/change [name/id] mobile to [val]
+        if not update_match:
+            update_match = re.search(rf'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)\s+{prop_phone}\s+to\s+([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
+            
         if update_match:
-            student_id = update_match.group(1).upper().strip()
+            target = update_match.group(1).strip().strip("'\"")
             new_number = update_match.group(2).strip()
             
-            student = await Student.find_one(Student.student_id == student_id)
+            # Find the student
+            student = None
+            if "@" in target:
+                student = await Student.find_one(Student.email == target)
+            else:
+                student = await Student.find_one(Student.student_id == target.upper())
+                if not student:
+                    students = await Student.find({
+                        "$or": [
+                            {"first_name": {"$regex": target, "$options": "i"}},
+                            {"last_name": {"$regex": target, "$options": "i"}}
+                        ]
+                    }).to_list()
+                    if students:
+                        student = students[0]
+            
             if not student:
                 return {
-                    "response": f"I couldn't find a student with ID '{student_id}' to update.",
+                    "response": f"I couldn't find a student matching '{target}' to update contact number.",
                     "action_taken": None
                 }
                 
             student.contact_number = new_number
-            student.updated_at = datetime.utcnow()
+            student.updated_at = datetime.datetime.utcnow()
             await student.save()
             
             return {
-                "response": f"📱 Successfully updated the contact number for {student.full_name} (ID: {student_id}) to: {new_number}",
+                "response": f"📱 Successfully updated the contact number for {student.full_name} (ID: {student.student_id}) to: {new_number}",
                 "action_taken": {"action": "update_student"}
             }
 
         # Update GPA
-        gpa_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9]+)\s+gpa\s+to\s+([0-9\.]+)', msg, re.IGNORECASE)
+        # Pattern A: update/change GPA of [name/id] to [val]
+        gpa_match = re.search(r'(?:update|change)\s+(?:the\s+)?gpa\s+of\s+([a-zA-Z0-9_ ]+?)\s+to\s+([0-9\.]+)', msg, re.IGNORECASE)
+        # Pattern B: update/change [name/id]\'s GPA to [val]
+        if not gpa_match:
+            gpa_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)\'s\s+gpa\s+to\s+([0-9\.]+)', msg, re.IGNORECASE)
+        # Pattern C: update/change [name/id] GPA to [val]
+        if not gpa_match:
+            gpa_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)\s+gpa\s+to\s+([0-9\.]+)', msg, re.IGNORECASE)
+            
         if gpa_match:
-            student_id = gpa_match.group(1).upper().strip()
+            target = gpa_match.group(1).strip().strip("'\"")
             new_gpa = float(gpa_match.group(2).strip())
             
-            student = await Student.find_one(Student.student_id == student_id)
+            student = None
+            if "@" in target:
+                student = await Student.find_one(Student.email == target)
+            else:
+                student = await Student.find_one(Student.student_id == target.upper())
+                if not student:
+                    students = await Student.find({
+                        "$or": [
+                            {"first_name": {"$regex": target, "$options": "i"}},
+                            {"last_name": {"$regex": target, "$options": "i"}}
+                        ]
+                    }).to_list()
+                    if students:
+                        student = students[0]
+            
             if not student:
                 return {
-                    "response": f"I couldn't find a student with ID '{student_id}' to update GPA.",
+                    "response": f"I couldn't find a student matching '{target}' to update GPA.",
                     "action_taken": None
                 }
                 
             student.gpa = new_gpa
-            student.updated_at = datetime.utcnow()
+            student.updated_at = datetime.datetime.utcnow()
             await student.save()
             return {
-                "response": f"📊 Successfully updated the GPA for {student.full_name} (ID: {student_id}) to: {new_gpa}",
+                "response": f"📊 Successfully updated the GPA for {student.full_name} (ID: {student.student_id}) to: {new_gpa}",
                 "action_taken": {"action": "update_student"}
             }
 
         # Update Status
-        status_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9]+)\s+status\s+to\s+(active|inactive|graduated)', msg, re.IGNORECASE)
+        # Pattern A: update/change status of [name/id] to [val]
+        status_match = re.search(r'(?:update|change)\s+(?:the\s+)?status\s+of\s+([a-zA-Z0-9_ ]+?)\s+to\s+(active|inactive|graduated)', msg, re.IGNORECASE)
+        # Pattern B: update/change [name/id]\'s status to [val]
+        if not status_match:
+            status_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)\'s\s+status\s+to\s+(active|inactive|graduated)', msg, re.IGNORECASE)
+        # Pattern C: update/change [name/id] status to [val]
+        if not status_match:
+            status_match = re.search(r'(?:update|change)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)\s+status\s+to\s+(active|inactive|graduated)', msg, re.IGNORECASE)
+            
         if status_match:
-            student_id = status_match.group(1).upper().strip()
+            target = status_match.group(1).strip().strip("'\"")
             new_status = status_match.group(2).strip().lower()
             
-            student = await Student.find_one(Student.student_id == student_id)
+            student = None
+            if "@" in target:
+                student = await Student.find_one(Student.email == target)
+            else:
+                student = await Student.find_one(Student.student_id == target.upper())
+                if not student:
+                    students = await Student.find({
+                        "$or": [
+                            {"first_name": {"$regex": target, "$options": "i"}},
+                            {"last_name": {"$regex": target, "$options": "i"}}
+                        ]
+                    }).to_list()
+                    if students:
+                        student = students[0]
+            
             if not student:
                 return {
-                    "response": f"I couldn't find a student with ID '{student_id}' to update status.",
+                    "response": f"I couldn't find a student matching '{target}' to update status.",
                     "action_taken": None
                 }
                 
             student.status = StudentStatus(new_status)
-            student.updated_at = datetime.utcnow()
+            student.updated_at = datetime.datetime.utcnow()
             await student.save()
             return {
-                "response": f"🎓 Successfully updated the status for {student.full_name} (ID: {student_id}) to: {new_status}",
+                "response": f"🎓 Successfully updated the status for {student.full_name} (ID: {student.student_id}) to: {new_status}",
                 "action_taken": {"action": "update_student"}
             }
 
