@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Resend Email API
     RESEND_API_KEY: Optional[str] = None
     
+    # Brevo Email API
+    BREVO_API_KEY: Optional[str] = None
+    
     # SMTP
     SMTP_HOST: Optional[str] = "smtp.gmail.com"
     SMTP_PORT: Optional[int] = 587

@@ -9,8 +9,72 @@ from typing import List, Optional
 
 
 class EmailService:
-    """Email service — uses Resend API when RESEND_API_KEY is set,
-    falls back to SMTP (aiosmtplib) otherwise."""
+    """Email service — uses Brevo API when BREVO_API_KEY is set,
+    falls back to Resend API when RESEND_API_KEY is set,
+    and falls back to SMTP (aiosmtplib) otherwise."""
+
+    # ------------------------------------------------------------------ #
+    #  Brevo API                                                         #
+    # ------------------------------------------------------------------ #
+
+    async def _send_via_brevo(
+        self,
+        to_emails: List[str],
+        subject: str,
+        body: str,
+        html: bool = False,
+        attachments: Optional[List[tuple]] = None,
+    ):
+        """Send email through the Brevo HTTP API."""
+
+        sender_email = settings.SMTP_FROM_EMAIL or "agricultureuniversityfsd@gmail.com"
+        sender_name = settings.SMTP_FROM_NAME or "Department Administration System"
+
+        payload = {
+            "sender": {
+                "name": sender_name,
+                "email": sender_email,
+            },
+            "to": [{"email": email} for email in to_emails],
+            "subject": subject,
+        }
+
+        if html:
+            payload["htmlContent"] = body
+        else:
+            payload["textContent"] = body
+
+        if attachments:
+            payload["attachment"] = [
+                {
+                    "name": filename,
+                    "content": base64.b64encode(content).decode("utf-8"),
+                }
+                for filename, content in attachments
+            ]
+
+        headers = {
+            "api-key": settings.BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "accept": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                json=payload,
+                headers=headers,
+            )
+
+        if response.status_code not in (200, 201, 202):
+            error_detail = response.text
+            print(f"Brevo API error {response.status_code}: {error_detail}")
+            raise RuntimeError(
+                f"Brevo API returned {response.status_code}: {error_detail}"
+            )
+
+        print(f"Email sent via Brevo to: {', '.join(to_emails)}")
+        return response.json()
 
     # ------------------------------------------------------------------ #
     #  Resend API                                                          #
@@ -153,7 +217,15 @@ class EmailService:
             html: Set True if body is HTML
             attachments: List of (filename, bytes) tuples
         """
-        if settings.RESEND_API_KEY:
+        if settings.BREVO_API_KEY:
+            await self._send_via_brevo(
+                to_emails=to_emails,
+                subject=subject,
+                body=body,
+                html=html,
+                attachments=attachments,
+            )
+        elif settings.RESEND_API_KEY:
             await self._send_via_resend(
                 to_emails=to_emails,
                 subject=subject,
