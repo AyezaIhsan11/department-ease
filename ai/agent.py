@@ -439,6 +439,85 @@ class StudentManagementAgent:
                 "action_taken": {"action": "delete_student"}
             }
 
+        # 8. ADD/CREATE STUDENT
+        create_match = re.search(r'(?:add|create)\s+(?:a\s+)?(?:new\s+)?student\s+(?:named\s+)?([a-zA-Z]+)\s+([a-zA-Z]+)', msg, re.IGNORECASE)
+        if create_match:
+            first_name = create_match.group(1).strip().capitalize()
+            last_name = create_match.group(2).strip().capitalize()
+            
+            # Extract email
+            email_match = re.search(r'email\s+([^\s,]+@[^\s,]+)', msg, re.IGNORECASE)
+            # Extract student ID
+            id_match = re.search(r'(?:id|student\s+id)\s+([a-zA-Z0-9\-]+)', msg, re.IGNORECASE)
+            # Extract department
+            dept_match = re.search(r'(?:department|dept)\s+of\s+([a-zA-Z\s]+?)(?:,|$|\s+with|\s+year|\s+email|\s+id)', msg, re.IGNORECASE)
+            if not dept_match:
+                dept_match = re.search(r'(?:department|dept)\s+([a-zA-Z\s]+?)(?:,|$|\s+with|\s+year|\s+email|\s+id)', msg, re.IGNORECASE)
+            # Extract year
+            year_match = re.search(r'year\s+(\d)', msg, re.IGNORECASE)
+            # Extract gpa
+            gpa_match = re.search(r'gpa\s+([0-9\.]+)', msg, re.IGNORECASE)
+            # Extract contact number
+            contact_match = re.search(r'(?:contact|phone|mobile)(?:\s+number)?\s+([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
+            
+            email = email_match.group(1).strip() if email_match else None
+            student_id = id_match.group(1).strip().upper() if id_match else None
+            department = dept_match.group(1).strip().title() if dept_match else None
+            year = int(year_match.group(1).strip()) if year_match else None
+            gpa = float(gpa_match.group(1).strip()) if gpa_match else None
+            contact = contact_match.group(1).strip() if contact_match else None
+            
+            # Validate required fields
+            missing = []
+            if not student_id:
+                missing.append("student ID (e.g. ID CS001)")
+            if not email:
+                missing.append("email (e.g. email john@example.com)")
+            if not department:
+                missing.append("department (e.g. department Computer Science)")
+            if not year:
+                missing.append("year (e.g. year 2)")
+                
+            if missing:
+                return {
+                    "response": f"I detected you want to add a student named {first_name} {last_name}, but I need the following missing details:\n" + "\n".join(f"- {m}" for m in missing) + "\n\nPlease provide them in your message, e.g.: `add student John Doe with ID CS001, email john@example.com, department Computer Science, year 2`.",
+                    "action_taken": None
+                }
+            
+            # Check duplicate ID
+            existing = await Student.find_one(Student.student_id == student_id)
+            if existing:
+                return {
+                    "response": f"Error: Student with ID {student_id} already exists.",
+                    "action_taken": None
+                }
+            
+            # Check duplicate Email
+            existing_email = await Student.find_one(Student.email == email)
+            if existing_email:
+                return {
+                    "response": f"Error: Email {email} is already registered.",
+                    "action_taken": None
+                }
+                
+            # Create student
+            student = Student(
+                student_id=student_id,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                department=department,
+                year=year,
+                gpa=gpa,
+                contact_number=contact
+            )
+            await student.insert()
+            
+            return {
+                "response": f"👤 Successfully created student record for **{first_name} {last_name}** (ID: `{student_id}`)!",
+                "action_taken": {"action": "create_student"}
+            }
+
         return None
 
     async def process_message(
@@ -551,6 +630,7 @@ class StudentManagementAgent:
                             "response": (
                                 f"⚠️ The AI assistant is temporarily unavailable due to Gemini API quota limits.\n\n"
                                 f"However, these commands work **without** Gemini and will succeed immediately:\n\n"
+                                f"👤 **Add student:** `add student [first] [last] with ID [id], email [email], department [dept], year [year]`\n"
                                 f"📧 **Email:** `send mail to [name]`\n"
                                 f"📋 **Voucher:** `send mail to [name] to upload voucher`\n"
                                 f"📱 **Update contact:** `update mobile no of [name] to [number]`\n"
