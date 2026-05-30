@@ -18,6 +18,22 @@ export default function StudentsPage() {
     const [importResult, setImportResult] = useState<{ created_count: number; total_rows: number; errors: string[] } | null>(null)
     const csvInputRef = useRef<HTMLInputElement>(null)
 
+    // Add student modal state
+    const [showAddModal, setShowAddModal] = useState(false)
+    const [newStudent, setNewStudent] = useState({
+        student_id: '',
+        first_name: '',
+        last_name: '',
+        email: '',
+        department: 'Computer Science',
+        year: 1,
+        gpa: '',
+        contact_number: '',
+        address: ''
+    })
+    const [submitting, setSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState('')
+
     useEffect(() => {
         loadStudents()
     }, [page, search, department])
@@ -103,6 +119,54 @@ export default function StudentsPage() {
         }
     }
 
+    const handleAddStudent = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setSubmitting(true)
+        setSubmitError('')
+
+        // Validation
+        if (!newStudent.student_id.trim() || !newStudent.first_name.trim() || !newStudent.last_name.trim() || !newStudent.email.trim() || !newStudent.department.trim()) {
+            setSubmitError('Please fill in all required fields.')
+            setSubmitting(false)
+            return
+        }
+
+        try {
+            const data: any = {
+                ...newStudent,
+                year: Number(newStudent.year),
+                gpa: newStudent.gpa ? Number(newStudent.gpa) : null,
+                contact_number: newStudent.contact_number || null,
+                address: newStudent.address || null
+            }
+            await api.post('/api/students', data)
+            setShowAddModal(false)
+            setNewStudent({
+                student_id: '',
+                first_name: '',
+                last_name: '',
+                email: '',
+                department: 'Computer Science',
+                year: 1,
+                gpa: '',
+                contact_number: '',
+                address: ''
+            })
+            loadStudents()
+        } catch (error: any) {
+            const detail = error.response?.data?.detail
+            if (typeof detail === 'string') {
+                setSubmitError(detail)
+            } else if (Array.isArray(detail)) {
+                setSubmitError(detail.map((d: any) => d.msg).join(', '))
+            } else {
+                setSubmitError('Error creating student. Please check the values and try again.')
+            }
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     return (
         <>
             <div className="min-h-screen p-6">
@@ -145,6 +209,12 @@ export default function StudentsPage() {
                             className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
                         >
                             📤 Export CSV
+                        </button>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg hover:from-purple-600 hover:to-indigo-700 transition flex items-center gap-1.5"
+                        >
+                            ➕ Add Student
                         </button>
                     </div>
                 </div>
@@ -285,7 +355,7 @@ export default function StudentsPage() {
                             </div>
                             <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
                                 <p className="text-3xl font-bold text-gray-600">{importResult.total_rows}</p>
-                                <p className="text-sm text-gray-700 mt-1">Total Rows</p>
+                                <p className="text-sm text-green-700 mt-1">Total Rows</p>
                             </div>
                             {importResult.errors.length > 0 && (
                                 <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-4 text-center">
@@ -308,6 +378,167 @@ export default function StudentsPage() {
                         >
                             Done
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Add Student Modal */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 overflow-y-auto max-h-[90vh]">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-gray-800">Add New Student</h2>
+                            <button
+                                onClick={() => setShowAddModal(false)}
+                                className="text-gray-500 hover:text-gray-700 text-2xl"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {submitError && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">
+                                {submitError}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleAddStudent} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        Student ID *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. CS2026001"
+                                        required
+                                        value={newStudent.student_id}
+                                        onChange={(e) => setNewStudent({ ...newStudent, student_id: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        Email *
+                                    </label>
+                                    <input
+                                        type="email"
+                                        placeholder="e.g. name@university.edu"
+                                        required
+                                        value={newStudent.email}
+                                        onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        First Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={newStudent.first_name}
+                                        onChange={(e) => setNewStudent({ ...newStudent, first_name: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        Last Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={newStudent.last_name}
+                                        onChange={(e) => setNewStudent({ ...newStudent, last_name: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        Department *
+                                    </label>
+                                    <select
+                                        value={newStudent.department}
+                                        onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                                    >
+                                        <option value="Computer Science">Computer Science</option>
+                                        <option value="Engineering">Engineering</option>
+                                        <option value="Mathematics">Mathematics</option>
+                                        <option value="Physics">Physics</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        Year *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="8"
+                                        required
+                                        value={newStudent.year}
+                                        onChange={(e) => setNewStudent({ ...newStudent, year: Number(e.target.value) })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        GPA (Optional)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0.0"
+                                        max="4.0"
+                                        value={newStudent.gpa}
+                                        onChange={(e) => setNewStudent({ ...newStudent, gpa: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                        Contact Number (Optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. +92-300-1234567"
+                                        value={newStudent.contact_number}
+                                        onChange={(e) => setNewStudent({ ...newStudent, contact_number: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                    Address (Optional)
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    value={newStudent.address}
+                                    onChange={(e) => setNewStudent({ ...newStudent, address: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                />
+                            </div>
+
+                            <div className="flex gap-4 pt-4 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddModal(false)}
+                                    className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={submitting}
+                                    className="flex-1 px-4 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition font-semibold disabled:opacity-50"
+                                >
+                                    {submitting ? 'Adding...' : 'Add Student'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
