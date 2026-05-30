@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Resend Email API (Optional, used if SMTP is blocked in cloud environments)
     RESEND_API_KEY: Optional[str] = None
     
+    # Brevo Email API (Optional)
+    BREVO_API_KEY: Optional[str] = None
+    
     # Redis
     REDIS_URL: Optional[str] = None
     

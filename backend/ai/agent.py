@@ -440,25 +440,28 @@ class StudentManagementAgent:
             }
 
         # 8. ADD/CREATE STUDENT
-        create_match = re.search(r'(?:add|create)\s+(?:a\s+)?(?:new\s+)?student\s+(?:named\s+)?([a-zA-Z]+)\s+([a-zA-Z]+)', msg, re.IGNORECASE)
-        if create_match:
-            first_name = create_match.group(1).strip().capitalize()
-            last_name = create_match.group(2).strip().capitalize()
+        # First try to find "name: [First] [Last]" or "name [First] [Last]" or "named [First] [Last]"
+        name_match = re.search(r'name\s*[:\-]?\s*([a-zA-Z]+)\s+([a-zA-Z]+)', msg, re.IGNORECASE)
+        if not name_match:
+            # If no explicit name label, try to match the two words after "add student", "create student", etc.
+            name_match = re.search(r'(?:add|create)\s+(?:a\s+)?(?:new\s+)?student\s+(?:named\s+)?([a-zA-Z]+)\s+([a-zA-Z]+)', msg, re.IGNORECASE)
+            
+        if name_match:
+            first_name = name_match.group(1).strip().capitalize()
+            last_name = name_match.group(2).strip().capitalize()
             
             # Extract email
-            email_match = re.search(r'email\s+([^\s,]+@[^\s,]+)', msg, re.IGNORECASE)
+            email_match = re.search(r'(?:email|mail)\s*[:\-]?\s*([^\s,]+@[^\s,]+)', msg, re.IGNORECASE)
             # Extract student ID
-            id_match = re.search(r'(?:id|student\s+id)\s+([a-zA-Z0-9\-]+)', msg, re.IGNORECASE)
+            id_match = re.search(r'(?:id|student\s+id)\s*[:\-]?\s*([a-zA-Z0-9\-]+)', msg, re.IGNORECASE)
             # Extract department
-            dept_match = re.search(r'(?:department|dept)\s+of\s+([a-zA-Z\s]+?)(?:,|$|\s+with|\s+year|\s+email|\s+id)', msg, re.IGNORECASE)
-            if not dept_match:
-                dept_match = re.search(r'(?:department|dept)\s+([a-zA-Z\s]+?)(?:,|$|\s+with|\s+year|\s+email|\s+id)', msg, re.IGNORECASE)
+            dept_match = re.search(r'(?:department|dept)\s*(?:of)?\s*[:\-]?\s*([a-zA-Z\s]+?)(?:,|$|\s+with|\s+year|\s+email|\s+id|\s+gpa|\s+contact|\s+phone)', msg, re.IGNORECASE)
             # Extract year
-            year_match = re.search(r'year\s+(\d)', msg, re.IGNORECASE)
+            year_match = re.search(r'year\s*[:\-]?\s*(\d)', msg, re.IGNORECASE)
             # Extract gpa
-            gpa_match = re.search(r'gpa\s+([0-9\.]+)', msg, re.IGNORECASE)
+            gpa_match = re.search(r'gpa\s*[:\-]?\s*([0-9\.]+)', msg, re.IGNORECASE)
             # Extract contact number
-            contact_match = re.search(r'(?:contact|phone|mobile)(?:\s+number)?\s+([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
+            contact_match = re.search(r'(?:contact|phone|mobile)(?:\s+number|\s+no)?\s*[:\-]?\s*([0-9\-\+\(\) ]+)', msg, re.IGNORECASE)
             
             email = email_match.group(1).strip() if email_match else None
             student_id = id_match.group(1).strip().upper() if id_match else None
@@ -613,8 +616,25 @@ class StudentManagementAgent:
                 if _is_quota_error(e):
                     # If the project is permanently blocked (limit is 0), don't sleep or retry at all
                     if "limit: 0" in str(e).lower() or "limit: 0" in repr(e).lower():
-                        print(f"[AI Agent] Quota limit is 0 (blocked/disabled). Skipping retries.")
-                        break
+                        print(f"[AI Agent] Quota limit is 0 (blocked/disabled). Returning early with warning.")
+                        return {
+                            "response": (
+                                f"⚠️ The AI assistant is temporarily unavailable due to Gemini API quota limits.\n\n"
+                                f"However, these commands work **without** Gemini and will succeed immediately:\n\n"
+                                f"👤 **Add student:** `add student [first] [last] with ID [id], email [email], department [dept], year [year]`\n"
+                                f"📧 **Email:** `send mail to [name]`\n"
+                                f"📋 **Voucher:** `send mail to [name] to upload voucher`\n"
+                                f"📱 **Update contact:** `update mobile no of [name] to [number]`\n"
+                                f"📊 **Update GPA:** `update gpa of [name] to [value]`\n"
+                                f"🎓 **Update status:** `update status of [name] to active/graduated`\n"
+                                f"👤 **View student:** `show details of [name]`\n"
+                                f"📃 **List students:** `list all students`\n"
+                                f"📈 **Statistics:** `show statistics`\n"
+                                f"🗑️ **Delete student:** `delete student [name or ID]`"
+                            ),
+                            "conversation_id": conversation_id,
+                            "action_taken": None
+                        }
                         
                     retry_delay = _parse_retry_delay(str(e))
                     
