@@ -25,7 +25,7 @@ export default function StudentsPage() {
         first_name: '',
         last_name: '',
         email: '',
-        department: 'Computer Science',
+        department: 'BS Computer Science (CS)',
         year: 1,
         gpa: '',
         contact_number: '',
@@ -146,7 +146,7 @@ export default function StudentsPage() {
                 first_name: '',
                 last_name: '',
                 email: '',
-                department: 'Computer Science',
+                department: 'BS Computer Science (CS)',
                 year: 1,
                 gpa: '',
                 contact_number: '',
@@ -239,11 +239,12 @@ export default function StudentsPage() {
                         }}
                         className="input-field-white"
                     >
-                        <option value="">All Departments</option>
-                        <option value="Computer Science">Computer Science</option>
-                        <option value="Engineering">Engineering</option>
-                        <option value="Mathematics">Mathematics</option>
-                        <option value="Physics">Physics</option>
+                        <option value="">All Degree Programs</option>
+                        <option value="BS Software Engineering (SE)">BS Software Engineering (SE)</option>
+                        <option value="BS Artificial Intelligence (AI)">BS Artificial Intelligence (AI)</option>
+                        <option value="BS Computer Science (CS)">BS Computer Science (CS)</option>
+                        <option value="BS Data Science (DS)">BS Data Science (DS)</option>
+                        <option value="BS Information Technology (IT)">BS Information Technology (IT)</option>
                     </select>
                 </div>
             </div>
@@ -258,7 +259,7 @@ export default function StudentsPage() {
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Mobile Number</th>
-                                <th className="text-left py-3 px-4 font-semibold text-gray-700">Department</th>
+                                <th className="text-left py-3 px-4 font-semibold text-gray-700">Degree Program</th>
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Year</th>
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700">GPA</th>
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
@@ -456,17 +457,18 @@ export default function StudentsPage() {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-1">
-                                        Department *
+                                        Degree Program *
                                     </label>
                                     <select
                                         value={newStudent.department}
                                         onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
                                     >
-                                        <option value="Computer Science">Computer Science</option>
-                                        <option value="Engineering">Engineering</option>
-                                        <option value="Mathematics">Mathematics</option>
-                                        <option value="Physics">Physics</option>
+                                        <option value="BS Software Engineering (SE)">BS Software Engineering (SE)</option>
+                                        <option value="BS Artificial Intelligence (AI)">BS Artificial Intelligence (AI)</option>
+                                        <option value="BS Computer Science (CS)">BS Computer Science (CS)</option>
+                                        <option value="BS Data Science (DS)">BS Data Science (DS)</option>
+                                        <option value="BS Information Technology (IT)">BS Information Technology (IT)</option>
                                     </select>
                                 </div>
                                 <div>

@@ -11,6 +11,37 @@ class StudentStatus(str, Enum):
     GRADUATED = "graduated"
 
 
+def normalize_degree(dept_str: Optional[str]) -> str:
+    """Normalize degree program string to standardized names."""
+    if not dept_str:
+        return "BS Computer Science (CS)"
+    
+    val = dept_str.strip().lower()
+    
+    # 1. Software Engineering
+    if "software" in val or "se" == val or "bsse" in val or "bs se" in val:
+        return "BS Software Engineering (SE)"
+    
+    # 2. Artificial Intelligence
+    if "artificial" in val or "intelligence" in val or "ai" == val or "bsai" in val or "bs ai" in val:
+        return "BS Artificial Intelligence (AI)"
+        
+    # 3. Data Science
+    if "data" in val or "ds" == val or "bsds" in val or "bs ds" in val:
+        return "BS Data Science (DS)"
+            
+    # 4. Information Technology
+    if "information" in val or "technology" in val or "it" == val or "bsit" in val or "bs it" in val:
+        return "BS Information Technology (IT)"
+        
+    # 5. Computer Science
+    if "computer" in val or "cs" == val or "bscs" in val or "bs cs" in val or "science" in val:
+        return "BS Computer Science (CS)"
+        
+    # Fallback to Title Case of the input if unrecognized
+    return dept_str.strip().title()
+
+
 class Student(Document):
     student_id: Indexed(str, unique=True)
     first_name: str

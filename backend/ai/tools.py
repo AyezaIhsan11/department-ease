@@ -1,5 +1,5 @@
 from langchain.tools import tool
-from models.student import Student, StudentStatus
+from models.student import Student, StudentStatus, normalize_degree
 from models.event import Event, EventCategory
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -51,7 +51,7 @@ async def create_student_tool(
         first_name=first_name,
         last_name=last_name,
         email=email,
-        department=department,
+        department=normalize_degree(department),
         year=year,
         gpa=gpa,
         contact_number=contact_number
@@ -186,6 +186,8 @@ async def update_student_tool(
         converted_value = int(value)
     elif field == 'status':
         converted_value = StudentStatus(value)
+    elif field == 'department':
+        converted_value = normalize_degree(value)
     
     setattr(student, field, converted_value)
     student.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -502,7 +504,7 @@ async def import_students_from_csv_tool(file_path: str) -> str:
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": email,
-                "department": department,
+                "department": normalize_degree(department),
                 "year": year,
             }
 
@@ -642,7 +644,7 @@ async def import_students_from_pdf_tool(file_path: str) -> str:
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": email,
-                "department": department,
+                "department": normalize_degree(department),
                 "year": year,
             }
 

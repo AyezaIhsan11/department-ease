@@ -6,7 +6,7 @@ import api from '@/lib/api'
 import { AnalyticsOverview } from '@/lib/types'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
-const COLORS = ['#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b']
+const COLORS = ['#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
 
 export default function DashboardPage() {
     const router = useRouter()
@@ -64,8 +64,8 @@ export default function DashboardPage() {
             <div className="glass-card-white mb-6 p-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-gradient">Department Dashboard</h1>
-                        <p className="text-gray-600 mt-1">Overview and analytics</p>
+                        <h1 className="text-3xl font-bold text-gradient">CS Department Dashboard</h1>
+                        <p className="text-gray-600 mt-1">Computer Science Department — Overview & Analytics</p>
                     </div>
                     <div className="flex flex-wrap gap-2 md:gap-3">
                         <button
@@ -157,7 +157,7 @@ export default function DashboardPage() {
             <div className="grid lg:grid-cols-2 gap-6 mb-6">
                 {/* Department Distribution */}
                 <div className="glass-card-white p-6">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Students by Department</h2>
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">Students by Degree Program</h2>
                     <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                             <Pie

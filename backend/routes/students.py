@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
-from models.student import Student, StudentStatus
+from models.student import Student, StudentStatus, normalize_degree
 from models.user import User
 from schemas.student import (
     StudentCreate,
@@ -135,7 +135,9 @@ async def create_student(
         )
     
     # Create student
-    student = Student(**student_data.model_dump())
+    student_dict = student_data.model_dump()
+    student_dict["department"] = normalize_degree(student_dict.get("department"))
+    student = Student(**student_dict)
     await student.insert()
     
     return student_to_response(student)
@@ -159,6 +161,8 @@ async def update_student(
     
     # Update fields
     update_data = student_data.model_dump(exclude_unset=True)
+    if "department" in update_data:
+        update_data["department"] = normalize_degree(update_data["department"])
     
     # Check email uniqueness if email is being updated
     if "email" in update_data:
@@ -269,7 +273,7 @@ async def upload_students_csv(
                     'first_name': row['first_name'],
                     'last_name': row['last_name'],
                     'email': row['email'],
-                    'department': row['department'],
+                    'department': normalize_degree(str(row['department'])),
                     'year': int(row['year'])
                 }
                 

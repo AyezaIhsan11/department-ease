@@ -42,7 +42,7 @@ class StudentManagementAgent:
         A rule-based fallback parser that executes common commands if the Gemini API is unavailable.
         Returns a response dictionary if matched and executed, otherwise None.
         """
-        from models.student import Student, StudentStatus
+        from models.student import Student, StudentStatus, normalize_degree
         from services.email_service import email_service
         from config import settings
         import os
@@ -455,7 +455,7 @@ class StudentManagementAgent:
             # Extract student ID
             id_match = re.search(r'(?:id|student\s+id)\s*[:\-]?\s*([a-zA-Z0-9\-]+)', msg, re.IGNORECASE)
             # Extract department
-            dept_match = re.search(r'(?:department|dept)\s*(?:of)?\s*[:\-]?\s*([a-zA-Z\s]+?)(?:,|$|\s+with|\s+year|\s+email|\s+id|\s+gpa|\s+contact|\s+phone)', msg, re.IGNORECASE)
+            dept_match = re.search(r'(?:department|dept|degree|program)\s*(?:of)?\s*[:\-]?\s*([a-zA-Z\s\(\)]+?)(?:,|$|\s+with|\s+year|\s+email|\s+id|\s+gpa|\s+contact|\s+phone)', msg, re.IGNORECASE)
             # Extract year
             year_match = re.search(r'year\s*[:\-]?\s*(\d)', msg, re.IGNORECASE)
             # Extract gpa
@@ -465,7 +465,7 @@ class StudentManagementAgent:
             
             email = email_match.group(1).strip() if email_match else None
             student_id = id_match.group(1).strip().upper() if id_match else None
-            department = dept_match.group(1).strip().title() if dept_match else None
+            department = normalize_degree(dept_match.group(1).strip()) if dept_match else None
             year = int(year_match.group(1).strip()) if year_match else None
             gpa = float(gpa_match.group(1).strip()) if gpa_match else None
             contact = contact_match.group(1).strip() if contact_match else None
@@ -477,13 +477,13 @@ class StudentManagementAgent:
             if not email:
                 missing.append("email (e.g. email john@example.com)")
             if not department:
-                missing.append("department (e.g. department Computer Science)")
+                missing.append("degree program (e.g. degree BS Computer Science (CS))")
             if not year:
                 missing.append("year (e.g. year 2)")
                 
             if missing:
                 return {
-                    "response": f"I detected you want to add a student named {first_name} {last_name}, but I need the following missing details:\n" + "\n".join(f"- {m}" for m in missing) + "\n\nPlease provide them in your message, e.g.: `add student John Doe with ID CS001, email john@example.com, department Computer Science, year 2`.",
+                    "response": f"I detected you want to add a student named {first_name} {last_name}, but I need the following missing details:\n" + "\n".join(f"- {m}" for m in missing) + "\n\nPlease provide them in your message, e.g.: `add student John Doe with ID CS001, email john@example.com, degree BS Computer Science (CS), year 2`.",
                     "action_taken": None
                 }
             
