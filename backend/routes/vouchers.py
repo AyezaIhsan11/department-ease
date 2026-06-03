@@ -96,3 +96,21 @@ async def update_voucher_status(voucher_id: str, status: str, current_user: dict
         )
     
     return {"message": f"Voucher status updated to {status}"}
+
+@router.delete("/{voucher_id}")
+async def delete_voucher(voucher_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a voucher (removes DB record and file from disk)"""
+    voucher = await Voucher.get(voucher_id)
+    if not voucher:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+
+    # Remove file from disk
+    disk_path = os.path.join(UPLOAD_DIR, voucher.filename)
+    if os.path.exists(disk_path):
+        try:
+            os.remove(disk_path)
+        except Exception:
+            pass  # Non-fatal — still delete the DB record
+
+    await voucher.delete()
+    return {"message": "Voucher deleted successfully"}

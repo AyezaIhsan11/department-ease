@@ -19,6 +19,7 @@ export default function VouchersPage() {
     const [vouchers, setVouchers] = useState<Voucher[]>([])
     const [loading, setLoading] = useState(true)
     const [updating, setUpdating] = useState<string | null>(null)
+    const [deleting, setDeleting] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
@@ -65,6 +66,22 @@ export default function VouchersPage() {
             console.error('Error updating status:', err)
         } finally {
             setUpdating(null)
+        }
+    }
+
+    const deleteVoucher = async (id: string) => {
+        if (!id) { setError('Voucher ID missing.'); return }
+        if (!confirm('Are you sure you want to delete this voucher? This cannot be undone.')) return
+        try {
+            setDeleting(id)
+            setError(null)
+            await api.delete(`/api/vouchers/${id}`)
+            setVouchers(prev => prev.filter(v => v.id !== id))
+        } catch (err: any) {
+            const msg = err?.response?.data?.detail || err?.message || 'Failed to delete voucher'
+            setError(`Error: ${msg}`)
+        } finally {
+            setDeleting(null)
         }
     }
 
@@ -123,7 +140,7 @@ export default function VouchersPage() {
                                 Uploaded: {new Date(voucher.upload_date).toLocaleString()}
                             </p>
                         </div>
-                        <div className="p-4 border-t border-gray-100 flex gap-2">
+                        <div className="p-4 border-t border-gray-100 flex gap-2 flex-wrap">
                             <a
                                 href={`${API_URL}${voucher.file_path}`}
                                 target="_blank"
@@ -155,6 +172,17 @@ export default function VouchersPage() {
                                     </button>
                                 </>
                             )}
+                            <button
+                                onClick={() => deleteVoucher(voucher.id)}
+                                disabled={deleting === voucher.id}
+                                title="Delete voucher"
+                                className={`px-3 py-2 rounded text-sm font-semibold text-white transition ${deleting === voucher.id
+                                    ? 'bg-gray-300 cursor-not-allowed'
+                                    : 'bg-red-700 hover:bg-red-800'
+                                    }`}
+                            >
+                                {deleting === voucher.id ? '...' : '🗑️'}
+                            </button>
                         </div>
                     </div>
                 ))}
