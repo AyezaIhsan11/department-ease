@@ -83,12 +83,21 @@ async def search_students_tool(
     query = {}
     
     if search_term:
-        query["$or"] = [
+        parts = search_term.strip().split()
+        or_queries = [
             {"student_id": {"$regex": search_term, "$options": "i"}},
             {"first_name": {"$regex": search_term, "$options": "i"}},
             {"last_name": {"$regex": search_term, "$options": "i"}},
             {"email": {"$regex": search_term, "$options": "i"}}
         ]
+        if len(parts) >= 2:
+            or_queries.append({
+                "$and": [
+                    {"first_name": {"$regex": parts[0], "$options": "i"}},
+                    {"last_name": {"$regex": " ".join(parts[1:]), "$options": "i"}}
+                ]
+            })
+        query["$or"] = or_queries
     
     if department:
         query["department"] = department

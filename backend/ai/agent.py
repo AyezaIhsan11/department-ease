@@ -23,6 +23,45 @@ def _is_quota_error(error: Exception) -> bool:
     return "RESOURCE_EXHAUSTED" in msg or "429" in msg or "QUOTA" in msg
 
 
+async def _find_student_by_target(target: str) -> Optional[Any]:
+    """
+    Helper to find a student by email, student_id, first_name, last_name, or full name.
+    Supports names split by space.
+    """
+    from models.student import Student
+    
+    target = target.strip()
+    if not target:
+        return None
+        
+    if "@" in target:
+        return await Student.find_one(Student.email == target)
+        
+    # Try finding by student_id
+    student = await Student.find_one(Student.student_id == target.upper())
+    if student:
+        return student
+        
+    # Search by first name, last name, or split first/last name
+    parts = target.split()
+    or_queries = [
+        {"first_name": {"$regex": target, "$options": "i"}},
+        {"last_name": {"$regex": target, "$options": "i"}}
+    ]
+    if len(parts) >= 2:
+        or_queries.append({
+            "$and": [
+                {"first_name": {"$regex": parts[0], "$options": "i"}},
+                {"last_name": {"$regex": " ".join(parts[1:]), "$options": "i"}}
+            ]
+        })
+        
+    students = await Student.find({"$or": or_queries}).to_list()
+    if students:
+        return students[0]
+    return None
+
+
 class StudentManagementAgent:
     """AI Agent for student management"""
     
@@ -73,20 +112,7 @@ class StudentManagementAgent:
                     target = target[4:]
                     
                 # Find the student
-                student = None
-                if "@" in target:
-                    student = await Student.find_one(Student.email == target)
-                else:
-                    student = await Student.find_one(Student.student_id == target.upper())
-                    if not student:
-                        students = await Student.find({
-                            "$or": [
-                                {"first_name": {"$regex": target, "$options": "i"}},
-                                {"last_name": {"$regex": target, "$options": "i"}}
-                            ]
-                        }).to_list()
-                        if students:
-                            student = students[0]
+                student = await _find_student_by_target(target)
                             
                 if not student:
                     return {
@@ -141,22 +167,7 @@ class StudentManagementAgent:
                 body = email_match.group(3).strip().strip("'\"")
                 
             # Find the student
-            student = None
-            if "@" in target:
-                student = await Student.find_one(Student.email == target)
-            else:
-                # Try finding by student_id
-                student = await Student.find_one(Student.student_id == target.upper())
-                if not student:
-                    # Search by first name or last name
-                    students = await Student.find({
-                        "$or": [
-                            {"first_name": {"$regex": target, "$options": "i"}},
-                            {"last_name": {"$regex": target, "$options": "i"}}
-                        ]
-                    }).to_list()
-                    if students:
-                        student = students[0]
+            student = await _find_student_by_target(target)
             
             if not student:
                 return {
@@ -218,20 +229,7 @@ class StudentManagementAgent:
             new_number = update_match.group(2).strip()
             
             # Find the student
-            student = None
-            if "@" in target:
-                student = await Student.find_one(Student.email == target)
-            else:
-                student = await Student.find_one(Student.student_id == target.upper())
-                if not student:
-                    students = await Student.find({
-                        "$or": [
-                            {"first_name": {"$regex": target, "$options": "i"}},
-                            {"last_name": {"$regex": target, "$options": "i"}}
-                        ]
-                    }).to_list()
-                    if students:
-                        student = students[0]
+            student = await _find_student_by_target(target)
             
             if not student:
                 return {
@@ -262,20 +260,7 @@ class StudentManagementAgent:
             target = gpa_match.group(1).strip().strip("'\"")
             new_gpa = float(gpa_match.group(2).strip())
             
-            student = None
-            if "@" in target:
-                student = await Student.find_one(Student.email == target)
-            else:
-                student = await Student.find_one(Student.student_id == target.upper())
-                if not student:
-                    students = await Student.find({
-                        "$or": [
-                            {"first_name": {"$regex": target, "$options": "i"}},
-                            {"last_name": {"$regex": target, "$options": "i"}}
-                        ]
-                    }).to_list()
-                    if students:
-                        student = students[0]
+            student = await _find_student_by_target(target)
             
             if not student:
                 return {
@@ -305,20 +290,7 @@ class StudentManagementAgent:
             target = status_match.group(1).strip().strip("'\"")
             new_status = status_match.group(2).strip().lower()
             
-            student = None
-            if "@" in target:
-                student = await Student.find_one(Student.email == target)
-            else:
-                student = await Student.find_one(Student.student_id == target.upper())
-                if not student:
-                    students = await Student.find({
-                        "$or": [
-                            {"first_name": {"$regex": target, "$options": "i"}},
-                            {"last_name": {"$regex": target, "$options": "i"}}
-                        ]
-                    }).to_list()
-                    if students:
-                        student = students[0]
+            student = await _find_student_by_target(target)
             
             if not student:
                 return {
@@ -339,20 +311,7 @@ class StudentManagementAgent:
         show_match = re.search(r'(?:show\s+details\s+of|view\s+student|get\s+details\s+for)\s+([a-zA-Z0-9\-\.\@ ]+)', msg, re.IGNORECASE)
         if show_match:
             target = show_match.group(1).strip().strip("'\"")
-            student = None
-            if "@" in target:
-                student = await Student.find_one(Student.email == target)
-            else:
-                student = await Student.find_one(Student.student_id == target.upper())
-                if not student:
-                    students = await Student.find({
-                        "$or": [
-                            {"first_name": {"$regex": target, "$options": "i"}},
-                            {"last_name": {"$regex": target, "$options": "i"}}
-                        ]
-                    }).to_list()
-                    if students:
-                        student = students[0]
+            student = await _find_student_by_target(target)
                         
             if not student:
                 return {
@@ -412,20 +371,7 @@ class StudentManagementAgent:
         delete_match = re.search(r'(?:delete|remove)\s+(?:student\s+)?([a-zA-Z0-9_ ]+?)(?:\s+from\s+(?:the\s+)?(?:system|database|records?))?$', msg, re.IGNORECASE)
         if delete_match:
             target = delete_match.group(1).strip().strip("'\"")
-            student = None
-            if "@" in target:
-                student = await Student.find_one(Student.email == target)
-            else:
-                student = await Student.find_one(Student.student_id == target.upper())
-                if not student:
-                    students_found = await Student.find({
-                        "$or": [
-                            {"first_name": {"$regex": target, "$options": "i"}},
-                            {"last_name": {"$regex": target, "$options": "i"}}
-                        ]
-                    }).to_list()
-                    if students_found:
-                        student = students_found[0]
+            student = await _find_student_by_target(target)
             if not student:
                 return {
                     "response": f"I couldn't find a student matching '{target}' to delete.",

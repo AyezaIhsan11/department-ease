@@ -20,3 +20,14 @@ else {
     Pause
 }
 # .\venv\Scripts\python.exe main.py
+# Create virtual environment
+# python -m venv venv
+# Activate it
+# .\venv\Scripts\Activate.ps1
+# Install all dependencies
+# pip install -r requirements.txt
+# Start the server
+# python main.py
+
+# Start MongoDB
+# Start-Service -Name MongoDB

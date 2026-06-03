@@ -104,16 +104,15 @@ export default function VouchersPage() {
                             {voucher.file_path.endsWith('.pdf') ? (
                                 <div className="flex items-center justify-center h-full text-4xl">📄</div>
                             ) : (
-                                <img 
-                                    src={`${API_URL}${voucher.file_path}`} 
-                                    alt="Voucher" 
+                                <img
+                                    src={`${API_URL}${voucher.file_path}`}
+                                    alt="Voucher"
                                     className="w-full h-full object-cover"
                                 />
                             )}
-                            <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold uppercase ${
-                                voucher.status === 'verified' ? 'bg-green-500 text-white' : 
+                            <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold uppercase ${voucher.status === 'verified' ? 'bg-green-500 text-white' :
                                 voucher.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-yellow-500 text-white'
-                            }`}>
+                                }`}>
                                 {voucher.status}
                             </div>
                         </div>
@@ -125,8 +124,8 @@ export default function VouchersPage() {
                             </p>
                         </div>
                         <div className="p-4 border-t border-gray-100 flex gap-2">
-                            <a 
-                                href={`${API_URL}${voucher.file_path}`} 
+                            <a
+                                href={`${API_URL}${voucher.file_path}`}
                                 target="_blank"
                                 className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 rounded text-sm font-semibold text-center hover:bg-blue-100 transition"
                             >
@@ -134,25 +133,23 @@ export default function VouchersPage() {
                             </a>
                             {voucher.status === 'pending' && (
                                 <>
-                                    <button 
+                                    <button
                                         onClick={() => updateStatus(voucher.id, 'verified')}
                                         disabled={updating === voucher.id}
-                                        className={`px-3 py-2 rounded text-sm font-semibold text-white transition ${
-                                            updating === voucher.id 
-                                            ? 'bg-green-300 cursor-not-allowed' 
+                                        className={`px-3 py-2 rounded text-sm font-semibold text-white transition ${updating === voucher.id
+                                            ? 'bg-green-300 cursor-not-allowed'
                                             : 'bg-green-500 hover:bg-green-600'
-                                        }`}
+                                            }`}
                                     >
                                         {updating === voucher.id ? '...' : 'Verify'}
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => updateStatus(voucher.id, 'rejected')}
                                         disabled={updating === voucher.id}
-                                        className={`px-3 py-2 rounded text-sm font-semibold text-white transition ${
-                                            updating === voucher.id 
-                                            ? 'bg-red-300 cursor-not-allowed' 
+                                        className={`px-3 py-2 rounded text-sm font-semibold text-white transition ${updating === voucher.id
+                                            ? 'bg-red-300 cursor-not-allowed'
                                             : 'bg-red-500 hover:bg-red-600'
-                                        }`}
+                                            }`}
                                     >
                                         {updating === voucher.id ? '...' : 'Reject'}
                                     </button>
